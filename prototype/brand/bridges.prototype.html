@@ -49,14 +49,36 @@ h1 { font-family: var(--display); font-weight: 800; font-size: clamp(22px, 4vw, 
 .card p { margin: 0; padding: 10px 14px 12px; font-size: 14px; color: var(--muted); }
 .d { color: var(--term-dim); } .b { color: var(--hi); font-weight: 500; }
 .l0 { color: var(--t0); } .l1 { color: var(--t1); } .l2 { color: var(--t2); } .l3 { color: var(--t3); } .l4 { color: var(--t4); }
+.hero { display: grid; gap: 10px; }
+.hero .term { border-radius: 10px; border: 1px solid var(--line); }
+.hero pre { min-height: 21.6em; }
+.hero-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.schedule { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+.schedule li { border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; color: var(--muted); cursor: pointer; }
+.schedule li[aria-current="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.schedule li span { font-family: var(--mono); font-size: 11px; margin-right: 6px; }
+h2.section { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 8px 0 0; }
 </style>
 </head>
 <body>
 <main>
   <header>
     <h1>Famous bridges, square pixels</h1>
-    <p class="lede">Twelve bridges on the same 40 × 14 pixel grid. Half blocks keep them to 7 terminal rows; double blocks and graph cells double the width to 80 columns. Grey to green still runs from the work GitHub cannot see to the graph.</p>
+    <p class="lede">Ten of the world's best-known bridges on the same 40 × 14 pixel grid. The banner rotates like a Google Doodle: one bridge per day, the same for everyone that day, with fresh greens each day.</p>
   </header>
+
+  <section class="hero" aria-label="Bridge of the day preview">
+    <div class="term"><pre id="hero"></pre></div>
+    <div class="hero-bar">
+      <button id="dprev" class="copy" aria-label="Previous day">← day</button>
+      <button id="dplay" class="copy">Play</button>
+      <button id="dnext" class="copy" aria-label="Next day">day →</button>
+      <span class="where" id="dlabel"></span>
+    </div>
+    <ol class="schedule" id="schedule" aria-label="Next ten days"></ol>
+  </section>
+
+  <h2 class="section">All bridges</h2>
 
   <div class="controls">
     <span>Pixels</span>
@@ -180,6 +202,15 @@ const BRIDGES = [
       arcade(g, 0, 39, 2, 6, 5, 2, 1);
       arcade(g, 3, 36, 7, 13, 4, 3, 1);
     } },
+  { name: 'Ponte Vecchio', where: 'Florence, 1345', note: 'Shops crowded on three low arches, uneven rooflines. Nothing else has that skyline.',
+    draw(g) {
+      arcade(g, 0, 39, 9, 13, 3, 3, 1);
+      rect(g, 0, 8, 39, 8);
+      for (const [x0, x1, top] of [[1, 5, 5], [6, 9, 4], [10, 14, 6], [15, 24, 2], [25, 29, 5], [30, 33, 4], [34, 38, 6]]) rect(g, x0, top, x1, 8);
+      rect(g, 15, 1, 24, 1);
+      for (const x of [17, 19, 21, 23]) rect(g, x, 3, x, 4, false);
+      for (const x of [3, 8, 12, 27, 31, 36]) set(g, x, 7, false);
+    } },
   { name: 'Rialto', where: 'Venice, 1591', note: 'One stone arch, a humped deck, the central portico with its pediment.',
     draw(g) {
       mass(g, 3, 36, x => 5 + 3 * ((x - 19.5) / 16.5) ** 2);
@@ -187,14 +218,6 @@ const BRIDGES = [
       for (const x of [8, 11, 14, 25, 28, 31]) set(g, x, 7, false);
       rect(g, 16, 2, 23, 5); rect(g, 18, 1, 21, 1); rect(g, 19, 0, 20, 0);
       set(g, 18, 4, false); set(g, 21, 4, false); set(g, 18, 3, false); set(g, 21, 3, false);
-    } },
-  { name: 'Stari Most', where: 'Mostar, 1566', note: 'A single steep stone arch between two towers. The purest arch of the set.',
-    draw(g) {
-      mass(g, 7, 32, x => 3 + 5 * ((x - 19.5) / 12.5) ** 2);
-      opening(g, 10, 29, 5, 13);
-      rect(g, 1, 2, 6, 13); rect(g, 2, 1, 5, 1); rect(g, 3, 0, 4, 0); set(g, 3, 5, false); set(g, 4, 5, false);
-      rect(g, 33, 4, 38, 13); rect(g, 34, 3, 37, 3); set(g, 35, 7, false); set(g, 36, 7, false);
-      rect(g, 0, 11, 9, 13); rect(g, 30, 11, 39, 13);
     } },
   { name: 'Forth Bridge', where: 'Edinburgh, 1890', note: 'Three cantilever diamonds. Busy at this size, but nothing else looks like it.',
     draw(g) {
@@ -223,24 +246,6 @@ const BRIDGES = [
       rect(g, 8, 7, 39, 7);
       arcade(g, 8, 39, 8, 13, 5, 2, 0);
       for (let x = 10; x <= 38; x += 4) rect(g, x, 5, x, 6);
-    } },
-  { name: 'Suramadu', where: 'Surabaya to Madura, 2009', note: 'Two H pylons and fanned stays over the Madura Strait. Longest bridge in Indonesia.',
-    draw(g) {
-      const deck = 8;
-      rect(g, 0, deck, 39, deck);
-      for (const p of [12, 25]) {
-        rect(g, p, 0, p, 13); rect(g, p + 2, 0, p + 2, 13); rect(g, p, 1, p + 2, 1); rect(g, p, deck + 2, p + 2, deck + 2);
-        for (const d of [3, 6, 9]) { line(g, p, 2, p - d, deck); line(g, p + 2, 2, p + 2 + d, deck); }
-      }
-    } },
-  { name: 'Ampera', where: 'Palembang, 1965', note: 'Twin lift towers joined by a high truss over the Musi. Blocky and very square.',
-    draw(g) {
-      const deck = 9;
-      rect(g, 0, deck, 39, deck);
-      for (const t of [9, 27]) { rect(g, t, 0, t, 13); rect(g, t + 3, 0, t + 3, 13); rect(g, t, 0, t + 3, 0); line(g, t, 1, t + 3, 4); line(g, t + 3, 1, t, 4); rect(g, t, 5, t + 3, 5); }
-      rect(g, 12, 1, 27, 1); rect(g, 12, 4, 27, 4);
-      for (let x = 13; x < 27; x += 3) { line(g, x, 1, x + 1, 4); line(g, x + 2, 1, x + 1, 4); }
-      rect(g, 8, 12, 13, 13); rect(g, 26, 12, 31, 13);
     } },
 ];
 
@@ -321,7 +326,44 @@ function draw() {
     };
     grid.appendChild(card);
   });
+  heroDraw();
 }
+
+// ---------- bridge of the day ----------
+// Rule for gb: bridge = days since epoch (local date) mod N, greens seeded by YYYYMMDD.
+// Same bridge and same greens for every run and every user on a given day.
+let DAY = 0, timer = null;
+const dateAt = off => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + off); return d; };
+const pick = d => {
+  const days = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
+  return { bridge: BRIDGES[days % BRIDGES.length], seed: d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate() };
+};
+const fmt = d => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+function heroDraw() {
+  const d = dateAt(DAY), { bridge, seed } = pick(d);
+  const saved = BUSY; BUSY = busyGrid(seed);
+  const g = blank(); bridge.draw(g);
+  const rows = render(g);
+  BUSY = saved;
+  document.getElementById('hero').innerHTML =
+    sp('l3', '$ ') + 'gb help\n' + rows.map(r => r.html).join('\n') + '\n' +
+    sp('d', `today: ${bridge.name}, ${bridge.where}`) + '\n\n' +
+    'Usage:\n  gb init      set up emails, source repos, secret, and the mirror repo\n  gb plan      preview what would be mirrored (writes nothing)\n  gb sync      mirror new activity and push';
+  document.getElementById('dlabel').textContent = `${fmt(d)}${DAY === 0 ? ' (today)' : ''} · ${bridge.name}`;
+  document.getElementById('schedule').innerHTML = Array.from({ length: 10 }, (_, i) => {
+    const di = dateAt(i);
+    return `<li data-i="${i}" aria-current="${i === DAY}"><span>${fmt(di)}</span>${pick(di).bridge.name}</li>`;
+  }).join('');
+}
+document.getElementById('schedule').addEventListener('click', e => { const li = e.target.closest('li'); if (li) { DAY = +li.dataset.i; heroDraw(); } });
+document.getElementById('dprev').onclick = () => { DAY--; heroDraw(); };
+document.getElementById('dnext').onclick = () => { DAY++; heroDraw(); };
+document.getElementById('dplay').onclick = e => {
+  if (timer) { clearInterval(timer); timer = null; e.target.textContent = 'Play'; return; }
+  e.target.textContent = 'Pause';
+  timer = setInterval(() => { DAY = (DAY + 1) % 10; heroDraw(); }, 2500);
+};
+
 function seg(id, fn) {
   const el = document.getElementById(id);
   el.addEventListener('click', e => {
