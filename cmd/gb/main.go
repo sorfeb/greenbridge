@@ -10,7 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/term"
+
 	"github.com/sorfeb/greenbridge/internal/app"
+	"github.com/sorfeb/greenbridge/internal/brand"
 	"github.com/sorfeb/greenbridge/internal/config"
 	"github.com/sorfeb/greenbridge/internal/ident"
 )
@@ -36,8 +40,17 @@ type list []string
 func (l *list) String() string     { return strings.Join(*l, ",") }
 func (l *list) Set(v string) error { *l = append(*l, v); return nil }
 
+// banner prints the bridge of the day, only when f is a terminal, so pipes
+// and scripts see plain output.
+func banner(f *os.File) {
+	if term.IsTerminal(f.Fd()) {
+		brand.Banner(f, time.Now(), lipgloss.NewRenderer(f))
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
+		banner(os.Stderr)
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
@@ -58,6 +71,7 @@ func main() {
 	case "version", "--version":
 		fmt.Println("gb", version)
 	case "help", "-h", "--help":
+		banner(os.Stdout)
 		fmt.Print(usage)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s", cmd, usage)
@@ -87,6 +101,7 @@ func runInit(args []string) error {
 	fs.BoolVar(&o.Force, "force", false, "replace existing config or secret")
 	_ = fs.Parse(args)
 	o.Emails, o.Repos, o.Scan = emails, repos, scan
+	banner(os.Stdout)
 	return app.Init(o, os.Stdin, os.Stdout)
 }
 
@@ -163,7 +178,7 @@ func runPlan(args []string) error {
 	fmt.Printf("already in mirror: %d, would add: %d\n\n", len(ledger), len(app.Diff(d.Entries, ledger)))
 	app.YearTable(os.Stdout, d.Entries)
 	fmt.Println()
-	app.Graph(os.Stdout, d.Entries, *weeks, time.Now())
+	app.Graph(os.Stdout, d.Entries, *weeks, time.Now(), brand.Paint(lipgloss.NewRenderer(os.Stdout)))
 	return nil
 }
 
