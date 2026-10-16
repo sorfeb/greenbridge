@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>greenbridge famous bridges</title>
+<!--
+  PROTOTYPE, throwaway. Question: which famous bridge silhouette should the gb banner use?
+  Follow-up to arch.prototype.html. Each bridge is drawn on a 40 x 14 square-pixel grid with a few
+  primitives (rect, line, cable, arcade), then rendered as half blocks, double blocks, or graph cells.
+  Open the file directly in a browser.
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@600;800&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #f4f7f4; --fg: #1b2420; --muted: #5d6b63; --line: #d8e0db; --card: #ffffff;
+  --term-bg: #0f1512; --term-fg: #d6e2da; --term-dim: #55645b;
+  --t0: #3a463f; --t1: #0e4429; --t2: #006d32; --t3: #26a641; --t4: #39d353; --hi: #ffffff;
+  --display: "Martian Mono", "IBM Plex Mono", ui-monospace, monospace;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root { --bg: #0b100d; --fg: #dbe6df; --muted: #8a9a91; --line: #24302a; --card: #121a16; color-scheme: dark; } }
+.light-term { --term-bg: #ffffff; --term-fg: #1f2328; --term-dim: #8c959f; --t0: #afb8c1; --t1: #9be9a8; --t2: #40c463; --t3: #30a14e; --t4: #216e39; --hi: #1f2328; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+main { max-width: 1180px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-right)) 64px max(16px, env(safe-area-inset-left)); display: grid; gap: 24px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(22px, 4vw, 30px); margin: 0; letter-spacing: -.02em; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 72ch; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-family: var(--mono); font-size: 13px; }
+.controls > span { color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { all: unset; cursor: pointer; padding: 6px 12px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.seg button:focus-visible { outline: 2px solid var(--t3); outline-offset: -2px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 540px), 1fr)); gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.card header { display: flex; gap: 10px; align-items: baseline; padding: 12px 14px 10px; flex-wrap: wrap; }
+.num { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.card h2 { font-family: var(--display); font-size: 14px; font-weight: 600; margin: 0; }
+.where { font-size: 13px; color: var(--muted); flex: 1; }
+.dims { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.copy { all: unset; cursor: pointer; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); }
+.copy:hover, .copy:focus-visible { color: var(--fg); border-color: var(--fg); }
+.term { background: var(--term-bg); color: var(--term-fg); flex: 1; overflow-x: auto; }
+.term pre { margin: 0; padding: 18px; font-family: var(--mono); font-size: 13px; line-height: 1.2; }
+.card p { margin: 0; padding: 10px 14px 12px; font-size: 14px; color: var(--muted); }
+.d { color: var(--term-dim); } .b { color: var(--hi); font-weight: 500; }
+.l0 { color: var(--t0); } .l1 { color: var(--t1); } .l2 { color: var(--t2); } .l3 { color: var(--t3); } .l4 { color: var(--t4); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Famous bridges, square pixels</h1>
+    <p class="lede">Twelve bridges on the same 40 × 14 pixel grid. Half blocks keep them to 7 terminal rows; double blocks and graph cells double the width to 80 columns. Grey to green still runs from the work GitHub cannot see to the graph.</p>
+  </header>
+
+  <div class="controls">
+    <span>Pixels</span>
+    <div class="seg" id="style">
+      <button data-v="half" aria-pressed="true">half blocks</button>
+      <button data-v="dbl">double blocks</button>
+      <button data-v="cells">graph cells</button>
+    </div>
+    <span>Colour</span>
+    <div class="seg" id="mode">
+      <button data-v="col" aria-pressed="true">left to right</button>
+      <button data-v="height">rising</button>
+      <button data-v="mono">green only</button>
+    </div>
+    <span>Name</span>
+    <div class="seg" id="word">
+      <button data-v="below" aria-pressed="true">below</button>
+      <button data-v="beside">beside</button>
+      <button data-v="none">none</button>
+    </div>
+    <span>Terminal</span>
+    <div class="seg" id="theme">
+      <button data-v="dark" aria-pressed="true">dark</button>
+      <button data-v="light">light</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</main>
+
+<script>
+// ---------- pixel canvas ----------
+const W = 40, H = 14;
+const blank = () => Array.from({ length: H }, () => Array(W).fill(false));
+function set(g, x, y, v = true) { x = Math.round(x); y = Math.round(y); if (y >= 0 && y < H && x >= 0 && x < W) g[y][x] = v; }
+function rect(g, x0, y0, x1, y1, v = true) { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(g, x, y, v); }
+function line(g, x0, y0, x1, y1) {
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let e = dx + dy;
+  for (;;) { set(g, x0, y0); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
+}
+// straight interpolation plus a parabolic sag (positive sags down, negative arches up); returns x -> y
+function cable(g, xa, ya, xb, yb, sag) {
+  const ys = {}; let prev = null;
+  for (let x = xa; x <= xb; x++) {
+    const t = (x - xa) / (xb - xa), y = Math.round(ya + (yb - ya) * t + sag * 4 * t * (1 - t));
+    ys[x] = y;
+    if (prev !== null) for (let k = Math.min(prev, y); k <= Math.max(prev, y); k++) set(g, x, k);
+    set(g, x, y); prev = y;
+  }
+  return ys;
+}
+function hangers(g, ys, x0, x1, step, deckY) {
+  for (let x = x0; x <= x1; x += step) if (ys[x] != null) rect(g, x, Math.min(ys[x], deckY), x, Math.max(ys[x], deckY));
+}
+// clear (or fill) a round-topped opening
+function opening(g, x0, x1, yTop, yBase, v = false) {
+  const a = (x1 - x0 + 1) / 2, cx = x0 + a, r = Math.min(a, yBase - yTop + 1), spring = yTop + r;
+  for (let y = yTop; y <= yBase; y++) for (let x = x0; x <= x1; x++) {
+    const px = x + .5, py = y + .5;
+    if (py >= spring || ((px - cx) / a) ** 2 + ((py - spring) / r) ** 2 <= 1) set(g, x, y, v);
+  }
+}
+function arcade(g, x0, x1, y0, y1, n, pier, rise = 2) {
+  rect(g, x0, y0, x1, y1);
+  const w = (x1 - x0 + 1 - pier) / n;
+  for (let i = 0; i < n; i++) opening(g, Math.round(x0 + pier + i * w), Math.round(x0 + (i + 1) * w) - 1, y0 + rise, y1);
+}
+// fill between a top profile and the bottom of the grid
+function mass(g, x0, x1, top) { for (let x = x0; x <= x1; x++) rect(g, x, Math.round(top(x)), x, H - 1); }
+
+// ---------- bridges ----------
+const BRIDGES = [
+  { name: 'Golden Gate', where: 'San Francisco, 1937', note: 'Art deco towers and one deep cable sag. The silhouette most people read as "bridge".',
+    draw(g) {
+      const deck = 10;
+      rect(g, 0, deck, 39, deck);
+      for (const t of [8, 29]) { rect(g, t, 0, t, 13); rect(g, t + 2, 0, t + 2, 13); for (const b of [0, 3, 6]) rect(g, t, b, t + 2, b); }
+      hangers(g, cable(g, 10, 0, 29, 0, 9), 12, 27, 3, deck);
+      hangers(g, cable(g, 0, 9, 8, 0, 2), 2, 7, 2, deck);
+      hangers(g, cable(g, 31, 0, 39, 9, 2), 32, 38, 2, deck);
+    } },
+  { name: 'Brooklyn', where: 'New York, 1883', note: 'Stone towers with twin gothic openings plus the diagonal stays. Heavier and older-looking.',
+    draw(g) {
+      const deck = 10;
+      for (const t of [7, 26]) { rect(g, t, 1, t + 6, 13); rect(g, t + 1, 0, t + 5, 0); opening(g, t + 1, t + 2, 3, deck); opening(g, t + 4, t + 5, 3, deck); }
+      rect(g, 0, deck, 39, deck);
+      hangers(g, cable(g, 13, 1, 26, 1, 8), 15, 24, 3, deck);
+      hangers(g, cable(g, 0, 9, 7, 1, 2), 2, 6, 2, deck);
+      hangers(g, cable(g, 32, 1, 39, 9, 2), 33, 38, 2, deck);
+      line(g, 13, 2, 18, deck); line(g, 26, 2, 21, deck);
+    } },
+  { name: 'Tower Bridge', where: 'London, 1894', note: 'Two pinnacled towers, the high walkways, curved side spans. Instantly London.',
+    draw(g) {
+      const deck = 10;
+      for (const t of [10, 24]) {
+        rect(g, t, 3, t + 5, 13); rect(g, t + 1, 1, t + 4, 2); rect(g, t + 2, 0, t + 3, 0);
+        set(g, t, 1); set(g, t + 5, 1); set(g, t, 2); set(g, t + 5, 2);
+        opening(g, t + 2, t + 3, 5, 6); opening(g, t + 1, t + 4, 8, 9);
+      }
+      rect(g, 16, 3, 23, 3); rect(g, 16, 5, 23, 5); for (let x = 17; x <= 23; x += 2) set(g, x, 4);
+      rect(g, 0, deck, 39, deck);
+      hangers(g, cable(g, 0, 9, 10, 4, 2), 2, 9, 2, deck);
+      hangers(g, cable(g, 29, 4, 39, 9, 2), 30, 37, 2, deck);
+    } },
+  { name: 'Sydney Harbour', where: 'Sydney, 1932', note: 'The coathanger: a truss arch with the deck slung through it and granite pylons each end.',
+    draw(g) {
+      const deck = 8;
+      const top = cable(g, 6, 12, 33, 12, -12), bot = cable(g, 8, 12, 31, 12, -9);
+      for (let x = 8; x <= 31; x += 2) if (top[x] != null && bot[x] != null) rect(g, x, top[x], x, bot[x]);
+      hangers(g, bot, 12, 27, 3, deck);
+      rect(g, 0, deck, 39, deck);
+      for (const p of [1, 34]) { rect(g, p, 3, p + 4, 9); rect(g, p + 1, 2, p + 3, 2); }
+      rect(g, 5, 12, 8, 13); rect(g, 31, 12, 34, 13);
+    } },
+  { name: 'Pont du Gard', where: 'Nîmes, 1st century', note: 'Three tiers of Roman arches. All arch, no cable: the closest to the arch you liked.',
+    draw(g) {
+      arcade(g, 0, 39, 0, 1, 13, 1, 1);
+      arcade(g, 0, 39, 2, 6, 5, 2, 1);
+      arcade(g, 3, 36, 7, 13, 4, 3, 1);
+    } },
+  { name: 'Rialto', where: 'Venice, 1591', note: 'One stone arch, a humped deck, the central portico with its pediment.',
+    draw(g) {
+      mass(g, 3, 36, x => 5 + 3 * ((x - 19.5) / 16.5) ** 2);
+      opening(g, 6, 33, 9, 13);
+      for (const x of [8, 11, 14, 25, 28, 31]) set(g, x, 7, false);
+      rect(g, 16, 2, 23, 5); rect(g, 18, 1, 21, 1); rect(g, 19, 0, 20, 0);
+      set(g, 18, 4, false); set(g, 21, 4, false); set(g, 18, 3, false); set(g, 21, 3, false);
+    } },
+  { name: 'Stari Most', where: 'Mostar, 1566', note: 'A single steep stone arch between two towers. The purest arch of the set.',
+    draw(g) {
+      mass(g, 7, 32, x => 3 + 5 * ((x - 19.5) / 12.5) ** 2);
+      opening(g, 10, 29, 5, 13);
+      rect(g, 1, 2, 6, 13); rect(g, 2, 1, 5, 1); rect(g, 3, 0, 4, 0); set(g, 3, 5, false); set(g, 4, 5, false);
+      rect(g, 33, 4, 38, 13); rect(g, 34, 3, 37, 3); set(g, 35, 7, false); set(g, 36, 7, false);
+      rect(g, 0, 11, 9, 13); rect(g, 30, 11, 39, 13);
+    } },
+  { name: 'Forth Bridge', where: 'Edinburgh, 1890', note: 'Three cantilever diamonds. Busy at this size, but nothing else looks like it.',
+    draw(g) {
+      const deck = 7;
+      rect(g, 0, deck, 39, deck);
+      for (const c of [7, 20, 33]) {
+        line(g, c - 6, deck, c - 1, 1); line(g, c + 1, 1, c + 6, deck); rect(g, c - 1, 1, c + 1, 1);
+        line(g, c - 6, deck, c - 1, 12); line(g, c + 6, deck, c + 1, 12);
+        rect(g, c - 1, 1, c - 1, 12); rect(g, c + 1, 1, c + 1, 12); rect(g, c - 2, 12, c + 2, 13);
+      }
+    } },
+  { name: 'Millau Viaduct', where: 'Millau, 2004', note: 'Tall masts, fanned stays, thin piers. Modern and airy; reads as engineering.',
+    draw(g) {
+      const deck = 6;
+      rect(g, 0, deck, 39, deck);
+      for (const x of [4, 11, 18, 25, 32]) {
+        rect(g, x, 0, x, deck); line(g, x, 1, x - 3, deck); line(g, x, 1, x + 3, deck);
+        rect(g, x - 1, deck + 1, x + 1, deck + 2); rect(g, x, deck + 3, x, 13);
+      }
+      rect(g, 38, deck + 1, 39, 13); rect(g, 0, deck + 1, 0, 13);
+    } },
+  { name: 'Charles Bridge', where: 'Prague, 1402', note: 'Gothic gate tower plus a run of low stone arches and statues on the parapet.',
+    draw(g) {
+      rect(g, 1, 4, 7, 13); rect(g, 2, 2, 6, 3); rect(g, 3, 1, 5, 1); rect(g, 4, 0, 4, 0); set(g, 1, 3); set(g, 7, 3);
+      opening(g, 3, 5, 9, 13); set(g, 4, 6, false);
+      rect(g, 8, 7, 39, 7);
+      arcade(g, 8, 39, 8, 13, 5, 2, 0);
+      for (let x = 10; x <= 38; x += 4) rect(g, x, 5, x, 6);
+    } },
+  { name: 'Suramadu', where: 'Surabaya to Madura, 2009', note: 'Two H pylons and fanned stays over the Madura Strait. Longest bridge in Indonesia.',
+    draw(g) {
+      const deck = 8;
+      rect(g, 0, deck, 39, deck);
+      for (const p of [12, 25]) {
+        rect(g, p, 0, p, 13); rect(g, p + 2, 0, p + 2, 13); rect(g, p, 1, p + 2, 1); rect(g, p, deck + 2, p + 2, deck + 2);
+        for (const d of [3, 6, 9]) { line(g, p, 2, p - d, deck); line(g, p + 2, 2, p + 2 + d, deck); }
+      }
+    } },
+  { name: 'Ampera', where: 'Palembang, 1965', note: 'Twin lift towers joined by a high truss over the Musi. Blocky and very square.',
+    draw(g) {
+      const deck = 9;
+      rect(g, 0, deck, 39, deck);
+      for (const t of [9, 27]) { rect(g, t, 0, t, 13); rect(g, t + 3, 0, t + 3, 13); rect(g, t, 0, t + 3, 0); line(g, t, 1, t + 3, 4); line(g, t + 3, 1, t, 4); rect(g, t, 5, t + 3, 5); }
+      rect(g, 12, 1, 27, 1); rect(g, 12, 4, 27, 4);
+      for (let x = 13; x < 27; x += 3) { line(g, x, 1, x + 1, 4); line(g, x + 2, 1, x + 1, 4); }
+      rect(g, 8, 12, 13, 13); rect(g, 26, 12, 31, 13);
+    } },
+];
+
+// ---------- colour + renderers ----------
+let STYLE = 'half', MODE = 'col', WORD = 'below';
+function level(x, y) {
+  if (MODE === 'mono') return 3;
+  const t = MODE === 'col' ? x / (W - 1) : 1 - y / (H - 1);
+  return t < .25 ? 0 : t < .45 ? 1 : t < .65 ? 2 : t < .82 ? 3 : 4;
+}
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const sp = (c, s) => `<span class="${c}">${esc(s)}</span>`;
+function render(g) {
+  const rows = [];
+  if (STYLE === 'half') {
+    for (let y = 0; y < H; y += 2) {
+      let html = '', text = '';
+      for (let x = 0; x < W; x++) {
+        const t = g[y][x], b = y + 1 < H && g[y + 1][x], s = t && b ? '█' : t ? '▀' : b ? '▄' : ' ';
+        html += s === ' ' ? s : sp('l' + level(x, y), s); text += s;
+      }
+      rows.push({ html, text });
+    }
+  } else {
+    const on = STYLE === 'dbl' ? '██' : '■ ';
+    for (let y = 0; y < H; y++) {
+      let html = '', text = '';
+      for (let x = 0; x < W; x++) { const s = g[y][x] ? on : '  '; html += g[y][x] ? sp('l' + level(x, y), s) : s; text += s; }
+      rows.push({ html, text });
+    }
+  }
+  const name = { html: sp('b', 'greenbridge') + sp('d', ' 0.1.0'), text: 'greenbridge 0.1.0' };
+  const tag = { html: sp('d', 'private commits, public graph'), text: 'private commits, public graph' };
+  if (WORD === 'below') {
+    const pad = ' '.repeat(Math.max(0, Math.floor((rows[0].text.length - 21) / 2)));
+    rows.push({ html: '', text: '' }, { html: pad + sp('b', 'g r e e n b r i d g e'), text: pad + 'g r e e n b r i d g e' });
+  } else if (WORD === 'beside') {
+    const at = Math.floor(rows.length / 2) - 1;
+    rows[at] = { html: rows[at].html + '   ' + name.html, text: rows[at].text + '   ' + name.text };
+    rows[at + 1] = { html: rows[at + 1].html + '   ' + tag.html, text: rows[at + 1].text + '   ' + tag.text };
+  }
+  return rows;
+}
+
+// ---------- page ----------
+const grid = document.getElementById('grid');
+function draw() {
+  grid.innerHTML = '';
+  BRIDGES.forEach((b, i) => {
+    const g = blank(); b.draw(g);
+    const rows = render(g);
+    const plain = rows.map(r => r.text.trimEnd()).join('\n');
+    const cols = Math.max(...rows.map(r => [...r.text.trimEnd()].length));
+    const card = document.createElement('article');
+    card.className = 'card';
+    card.innerHTML = `<header><span class="num">${String(i + 1).padStart(2, '0')}</span><h2>${b.name}</h2><span class="where">${b.where}</span><span class="dims">${cols}×${rows.length}</span><button class="copy">Copy</button></header>
+      <div class="term"><pre>${rows.map(r => r.html).join('\n')}</pre></div><p>${b.note}</p>`;
+    const btn = card.querySelector('.copy');
+    btn.onclick = async () => {
+      try { await navigator.clipboard.writeText(plain); btn.textContent = 'Copied'; }
+      catch { const r = document.createRange(); r.selectNodeContents(card.querySelector('pre')); getSelection().removeAllRanges(); getSelection().addRange(r); btn.textContent = 'Selected'; }
+      setTimeout(() => btn.textContent = 'Copy', 1400);
+    };
+    grid.appendChild(card);
+  });
+}
+function seg(id, fn) {
+  const el = document.getElementById(id);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    fn(b.dataset.v);
+  });
+}
+seg('style', v => { STYLE = v; draw(); });
+seg('mode', v => { MODE = v; draw(); });
+seg('word', v => { WORD = v; draw(); });
+seg('theme', v => document.body.classList.toggle('light-term', v === 'light'));
+draw();
+</script>
+</body>
+</html>
