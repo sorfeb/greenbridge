@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>greenbridge arch banners</title>
+<!--
+  PROTOTYPE, throwaway. Question: which square-pixel arch should the gb banner use?
+  Follow-up to brand.prototype.html variant A (Arch). Every arch is generated from a pixel grid,
+  so sizes and thickness are easy to tweak in SAMPLES below. Open the file directly in a browser.
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@600;800&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #f4f7f4; --fg: #1b2420; --muted: #5d6b63; --line: #d8e0db; --card: #ffffff;
+  --term-bg: #0f1512; --term-fg: #d6e2da; --term-dim: #55645b;
+  --t0: #2a332e; --t1: #0e4429; --t2: #006d32; --t3: #26a641; --t4: #39d353; --hi: #ffffff;
+  --display: "Martian Mono", "IBM Plex Mono", ui-monospace, monospace;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root { --bg: #0b100d; --fg: #dbe6df; --muted: #8a9a91; --line: #24302a; --card: #121a16; color-scheme: dark; } }
+/* light terminal toggle: same GitHub light scale */
+.light-term { --term-bg: #ffffff; --term-fg: #1f2328; --term-dim: #8c959f; --t0: #d0d7de; --t1: #9be9a8; --t2: #40c463; --t3: #30a14e; --t4: #216e39; --hi: #1f2328; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+main { max-width: 1120px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-right)) 64px max(16px, env(safe-area-inset-left)); display: grid; gap: 24px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(22px, 4vw, 30px); margin: 0; letter-spacing: -.02em; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-family: var(--mono); font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { all: unset; cursor: pointer; padding: 6px 12px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.seg button:focus-visible { outline: 2px solid var(--t3); outline-offset: -2px; }
+.controls label { color: var(--muted); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 1fr)); gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.card header { display: flex; gap: 10px; align-items: baseline; padding: 12px 14px 10px; }
+.num { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.card h2 { font-family: var(--display); font-size: 14px; font-weight: 600; margin: 0; flex: 1; }
+.dims { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.copy { all: unset; cursor: pointer; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); }
+.copy:hover, .copy:focus-visible { color: var(--fg); border-color: var(--fg); }
+.term { background: var(--term-bg); color: var(--term-fg); flex: 1; overflow-x: auto; }
+.term pre { margin: 0; padding: 18px; font-family: var(--mono); font-size: 13px; line-height: 1.2; }
+.card p { margin: 0; padding: 10px 14px 12px; font-size: 14px; color: var(--muted); }
+.d { color: var(--term-dim); } .b { color: var(--hi); font-weight: 500; }
+.l0 { color: var(--t0); } .l1 { color: var(--t1); } .l2 { color: var(--t2); } .l3 { color: var(--t3); } .l4 { color: var(--t4); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Arch, square edition</h1>
+    <p class="lede">Fifteen arches built from square pixels. A terminal cell is about twice as tall as wide, so a square pixel is either two full blocks <code>██</code> or one half block <code>▀ ▄</code>. Colour runs from grey (work GitHub cannot see) to green (the graph). Copy gives the plain text for <code>cmd/gb</code>.</p>
+  </header>
+
+  <div class="controls">
+    <label>Colour</label>
+    <div class="seg" id="mode">
+      <button data-v="col" aria-pressed="true">left to right</button>
+      <button data-v="height">rising</button>
+      <button data-v="mono">green only</button>
+    </div>
+    <label>Terminal</label>
+    <div class="seg" id="theme">
+      <button data-v="dark" aria-pressed="true">dark</button>
+      <button data-v="light">light</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</main>
+
+<script>
+// ---------- pixel grids ----------
+// Arch: semi-ellipse ring above the spring line, straight legs below it. T is ring thickness in pixels.
+function arch(W, H, T, spring = Math.ceil(H * .6)) {
+  const g = [];
+  const cx = W / 2, a = W / 2, b = spring;
+  for (let y = 0; y < H; y++) {
+    const row = [];
+    for (let x = 0; x < W; x++) {
+      const px = x + .5, py = y + .5;
+      let on;
+      if (py < b) {
+        const o = ((px - cx) / a) ** 2 + ((py - b) / b) ** 2;
+        const i = ((px - cx) / (a - T)) ** 2 + ((py - b) / (b - T)) ** 2;
+        on = o <= 1 && i > 1;
+      } else on = px < T || px > W - T;
+      row.push(on);
+    }
+    g.push(row);
+  }
+  return g;
+}
+// deck across the top, hangers from deck to arch every `step` columns
+function withDeck(g, step = 3) {
+  const W = g[0].length, deck = Array(W).fill(true);
+  const out = [deck, ...g.map(r => r.slice())];
+  for (let x = 1; x < W - 1; x += step) for (let y = 1; y < out.length && !out[y][x]; y++) out[y][x] = true;
+  return out;
+}
+const hcat = (a, b, gap = 0) => a.map((r, y) => [...r, ...Array(gap).fill(false), ...b[y]]);
+const parse = s => s.trim().split('\n').map(r => [...r.trim()].map(c => c === '#'));
+
+// ---------- colour levels ----------
+let MODE = 'col';
+function level(x, y, W, H) {
+  if (MODE === 'mono') return 3;
+  const t = MODE === 'col' ? x / Math.max(1, W - 1) : 1 - y / Math.max(1, H - 1);
+  return t < .25 ? 0 : t < .45 ? 1 : t < .65 ? 2 : t < .82 ? 3 : 4;
+}
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const sp = (c, s) => `<span class="${c}">${esc(s)}</span>`;
+
+// ---------- renderers: return {html, text} ----------
+function dbl(g, ch = '██') {
+  const H = g.length, W = g[0].length; let html = '', text = '';
+  g.forEach((r, y) => { r.forEach((on, x) => { const s = on ? ch : '  '; html += on ? sp('l' + level(x, y, W, H), s) : s; text += s; }); html += '\n'; text += '\n'; });
+  return { html, text };
+}
+function shades(g) {
+  const H = g.length, W = g[0].length, chars = ['░░', '▒▒', '▓▓', '██', '██']; let html = '', text = '';
+  g.forEach((r, y) => { r.forEach((on, x) => { const l = level(x, y, W, H); const s = on ? chars[l] : '  '; html += on ? sp('l' + Math.max(l, 1), s) : s; text += s; }); html += '\n'; text += '\n'; });
+  return { html, text };
+}
+// one cell per pixel like the contribution graph; off cells optionally shown as graph dots
+function cells(g, off = '  ', on = '■ ') {
+  const H = g.length, W = g[0].length; let html = '', text = '';
+  g.forEach((r, y) => { r.forEach((v, x) => { const s = v ? on : off; html += v ? sp('l' + level(x, y, W, H), s) : (off.trim() ? sp('l0', s) : s); text += s; }); html += '\n'; text += '\n'; });
+  return { html, text };
+}
+// half blocks: two pixel rows per text row, one column per pixel
+function half(g) {
+  if (g.length % 2) g = [...g, Array(g[0].length).fill(false)];
+  const H = g.length, W = g[0].length; let html = '', text = '';
+  for (let y = 0; y < H; y += 2) {
+    for (let x = 0; x < W; x++) {
+      const t = g[y][x], b = g[y + 1][x], s = t && b ? '█' : t ? '▀' : b ? '▄' : ' ';
+      html += s === ' ' ? s : sp('l' + level(x, y, W, H), s); text += s;
+    }
+    html += '\n'; text += '\n';
+  }
+  return { html, text };
+}
+// put text lines to the right of art rows, starting at row `at`
+function beside(art, lines, at = 0, gap = '   ') {
+  const h = art.html.split('\n'), t = art.text.split('\n');
+  lines.forEach((l, i) => { const r = at + i; if (r < h.length) { h[r] += gap + l.html; t[r] += gap + l.text; } });
+  return { html: h.join('\n'), text: t.join('\n') };
+}
+function under(art, lines) {
+  return { html: art.html + lines.map(l => l.html).join('\n') + '\n', text: art.text + lines.map(l => l.text).join('\n') + '\n' };
+}
+const L = (html, text) => ({ html, text });
+const NAME = L(sp('b', 'greenbridge') + sp('d', ' 0.1.0'), 'greenbridge 0.1.0');
+const TAG = L(sp('d', 'private commits, public graph'), 'private commits, public graph');
+const SPACED = L(sp('b', 'g r e e n b r i d g e'), 'g r e e n b r i d g e');
+
+// ---------- samples ----------
+// hand-drawn grids: crisper stair steps than the generator at small sizes
+const SOLID = parse(`
+  ....#######....
+  ..###########..
+  .###.......###.
+  ###.........###
+  ##...........##
+  ##...........##
+  ##...........##`);
+const THIN = parse(`
+  .....#####.....
+  ...##.....##...
+  ..#.........#..
+  .#...........#.
+  #.............#
+  #.............#
+  #.............#`);
+const STAIR = parse(`
+  ...#########...
+  ..##.......##..
+  .##.........##.
+  ##...........##
+  #.............#
+  #.............#`);
+const CELLS = parse(`
+  ....#####....
+  ..##.....##..
+  .#.........#.
+  #...........#
+  #...........#
+  #...........#`);
+const DECK = parse(`
+  #################
+  #.#.#.#####.#.#.#
+  #.#.##.....##.#.#
+  #.##.........##.#
+  ##.............##
+  #...............#
+  #...............#`);
+const VIADUCT = parse(`
+  ###################
+  ..#####..#..#####..
+  .##...##.#.##...##.
+  ##.....#####.....##
+  #.......###.......#
+  #.......###.......#`);
+const SMALL = parse(`
+  ..#####..
+  .##...##.
+  ##.....##
+  #.......#
+  #.......#`);
+
+// arch over a strip of real-looking activity: under the bridge is the graph
+function traffic() {
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const g = SOLID, H = g.length, W = g[0].length, shade = ['· ', '░░', '▒▒', '▓▓', '██'];
+  let html = '', text = '';
+  g.forEach((r, y) => {
+    r.forEach((on, x) => {
+      if (on) { const s = '██'; html += sp('l' + level(x, y, W, H), s); text += s; return; }
+      const inside = y >= 2 && x > 1 && x < W - 2 && (y > 2 || (x > 3 && x < W - 4));
+      if (!inside) { html += '  '; text += '  '; return; }
+      const l = rnd() < .45 ? 0 : 1 + Math.floor(rnd() * 3);
+      html += sp(l ? 'l' + l : 'l0', shade[l]); text += shade[l];
+    });
+    html += '\n'; text += '\n';
+  });
+  return under({ html, text }, [L('', ''), SPACED]);
+}
+
+const SAMPLES = [
+  { name: 'Solid', note: 'The original arch rebuilt on a square grid, two pixels thick. Heavy, reads instantly.',
+    make: () => under(dbl(SOLID), [L('', ''), SPACED]) },
+  { name: 'Thin stair', note: 'One-pixel ring. Lighter, and the stair steps become the look.',
+    make: () => under(dbl(THIN), [L('', ''), SPACED]) },
+  { name: 'Flat crown', note: 'Wide flat top, short shoulders. Squarer, closer to a pixel-art bridge.',
+    make: () => under(dbl(STAIR), [L('', ''), SPACED]) },
+  { name: 'Contribution cells', note: 'Each pixel is a separate square, like graph cells. Most on-brand with gb plan.',
+    make: () => beside(cells(CELLS), [NAME, TAG], 2) },
+  { name: 'Arch on the graph', note: 'The arch rises out of a dotted 7-row grid. Off cells use the empty-day dot from gb plan.',
+    make: () => beside(cells(SOLID, '· '), [NAME, TAG], 3) },
+  { name: 'Activity underneath', note: 'Graph shades fill the space under the arch: the bridge spans your actual work.',
+    make: traffic },
+  { name: 'Half-block smooth', note: 'Twice the vertical resolution in half the rows. Smoothest curve, still square pixels.',
+    make: () => under(half(arch(32, 10, 3)), [SPACED]) },
+  { name: 'Shade ramp', note: 'Density climbs with colour: ░ ▒ ▓ █. Survives terminals without colour.',
+    make: () => under(shades(SOLID), [L('', ''), SPACED]) },
+  { name: 'Deck and hangers', note: 'A road deck with hangers down to the arch. Most literal bridge of the set.',
+    make: () => beside(cells(DECK), [NAME, TAG], 3) },
+  { name: 'Viaduct', note: 'Two arches under one deck. Repetition hints at commits mirrored one by one.',
+    make: () => under(dbl(VIADUCT), [L('', ''), SPACED]) },
+  { name: 'Lockup, 5 rows', note: 'Small arch left, name and tagline right. Fits above help without pushing it off screen.',
+    make: () => beside(dbl(SMALL), [NAME, TAG], 2) },
+  { name: 'Lockup, 5 rows, cells', note: 'Same lockup in separate squares. Lighter on screen than solid blocks.',
+    make: () => beside(cells(SMALL), [NAME, TAG], 2) },
+  { name: 'Lockup, 2 rows', note: 'Half-block mini arch. Small enough to print on every interactive command.',
+    make: () => beside(half(arch(10, 4, 2)), [L(sp('b', 'greenbridge') + sp('d', ' 0.1.0 · private commits, public graph'), 'greenbridge 0.1.0 · private commits, public graph')], 0) },
+  { name: 'Keystone', note: 'Hand-drawn 11 x 6 with a square keystone gap at the crown.',
+    make: () => beside(dbl(parse(`
+      ...##.##...
+      .###...###.
+      ##.......##
+      #.........#
+      #.........#
+      #.........#`)), [NAME, TAG], 2) },
+  { name: 'One-glyph prefix', note: 'Four characters. A prefix rather than a banner, for every command.',
+    make: () => ({ html: sp('l1', '▟') + sp('l2', '▀') + sp('l3', '▀') + sp('l4', '▙') + ' ' + sp('b', 'gb') + sp('d', '  greenbridge 0.1.0'), text: '▟▀▀▙ gb  greenbridge 0.1.0' }) },
+];
+
+// ---------- render ----------
+const grid = document.getElementById('grid');
+function render() {
+  grid.innerHTML = '';
+  SAMPLES.forEach((s, i) => {
+    const art = s.make();
+    const rows = art.text.replace(/\n+$/, '').split('\n');
+    const cols = Math.max(...rows.map(r => [...r.trimEnd()].length));
+    const card = document.createElement('article');
+    card.className = 'card';
+    card.innerHTML = `<header><span class="num">${String(i + 1).padStart(2, '0')}</span><h2>${s.name}</h2><span class="dims">${cols}×${rows.length}</span><button class="copy">Copy</button></header>
+      <div class="term"><pre>${art.html}</pre></div><p>${s.note}</p>`;
+    const btn = card.querySelector('.copy');
+    btn.onclick = async () => {
+      const plain = rows.map(r => r.trimEnd()).join('\n');
+      try { await navigator.clipboard.writeText(plain); btn.textContent = 'Copied'; }
+      catch { const r = document.createRange(); r.selectNodeContents(card.querySelector('pre')); getSelection().removeAllRanges(); getSelection().addRange(r); btn.textContent = 'Selected'; }
+      setTimeout(() => btn.textContent = 'Copy', 1400);
+    };
+    grid.appendChild(card);
+  });
+}
+function seg(id, fn) {
+  const el = document.getElementById(id);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    fn(b.dataset.v);
+  });
+}
+seg('mode', v => { MODE = v; render(); });
+seg('theme', v => document.body.classList.toggle('light-term', v === 'light'));
+render();
+</script>
+</body>
+</html>
