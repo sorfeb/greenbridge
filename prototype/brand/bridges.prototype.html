@@ -347,7 +347,7 @@ function heroDraw() {
   BUSY = saved;
   document.getElementById('hero').innerHTML =
     sp('l3', '$ ') + 'gb help\n' + rows.map(r => r.html).join('\n') + '\n' +
-    sp('d', `today: ${bridge.name}, ${bridge.where}`) + '\n\n' +
+    sp('d', `${bridge.name}, ${bridge.where}`) + '\n\n' +
     'Usage:\n  gb init      set up emails, source repos, secret, and the mirror repo\n  gb plan      preview what would be mirrored (writes nothing)\n  gb sync      mirror new activity and push';
   document.getElementById('dlabel').textContent = `${fmt(d)}${DAY === 0 ? ' (today)' : ''} · ${bridge.name}`;
   document.getElementById('schedule').innerHTML = Array.from({ length: 10 }, (_, i) => {
