@@ -1,0 +1,304 @@
+<title>greenbridge brand prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--
+  PROTOTYPE, throwaway. Question: what should the gb terminal banner (ASCII art) and the greenbridge logo look like?
+  Four variants, switchable via ?variant=A..D or #A..#D, arrow keys, or the bottom bar.
+  Each variant pairs one logo with the banner it implies, shown above real `gb help` and `gb plan` output.
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column; logo sheet on top (light + dark swatches), terminal mock below, floating variant switcher. */
+:root {
+  --bg: #f4f7f4; --surface: #ffffff; --fg: #1b2420; --muted: #5d6b63; --line: #d8e0db;
+  /* GitHub contribution scale, light */
+  --g0: #ebedf0; --g1: #9be9a8; --g2: #40c463; --g3: #30a14e; --g4: #216e39;
+  --term-bg: #0f1512; --term-fg: #d6e2da; --term-dim: #6f8077;
+  --t0: #2a332e; --t1: #0e4429; --t2: #006d32; --t3: #26a641; --t4: #39d353;
+  --bar-bg: #1b2420; --bar-fg: #f4f7f4;
+  --display: "Martian Mono", "IBM Plex Mono", ui-monospace, monospace;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b100d; --surface: #121a16; --fg: #dbe6df; --muted: #8a9a91; --line: #24302a;
+  --g0: #161b22; --g1: #0e4429; --g2: #006d32; --g3: #26a641; --g4: #39d353;
+  --bar-bg: #dbe6df; --bar-fg: #0b100d; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0b100d; --surface: #121a16; --fg: #dbe6df; --muted: #8a9a91; --line: #24302a;
+  --g0: #161b22; --g1: #0e4429; --g2: #006d32; --g3: #26a641; --g4: #39d353;
+  --bar-bg: #dbe6df; --bar-fg: #0b100d; color-scheme: dark;
+}
+/* forced swatches so each logo is judged on both grounds regardless of theme */
+.on-light { --sw-bg: #ffffff; --fg: #1b2420; --muted: #5d6b63; --g0: #ebedf0; --g1: #9be9a8; --g2: #40c463; --g3: #30a14e; --g4: #216e39; }
+.on-dark  { --sw-bg: #0d1117; --fg: #e6edf3; --muted: #8b949e; --g0: #161b22; --g1: #0e4429; --g2: #006d32; --g3: #26a641; --g4: #39d353; }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55; }
+main { max-width: 980px; margin: 0 auto; padding-block: 32px 120px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(22px, 4vw, 32px); margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+.thesis { margin: 0; max-width: 65ch; color: var(--muted); }
+h2 { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+
+.sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .sheet { grid-template-columns: 1fr; } }
+.swatch { background: var(--sw-bg); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-wrap: wrap; align-items: end; gap: 22px; min-width: 0; }
+.swatch .size { display: grid; justify-items: center; gap: 6px; }
+.swatch .size span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.lockup { display: flex; align-items: center; gap: 10px; flex-basis: 100%; padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--muted) 25%, transparent); }
+.wordmark { font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: -.03em; }
+.wordmark b { color: var(--g3); font-weight: 800; }
+.avatar { border-radius: 50%; overflow: hidden; background: var(--g0); display: grid; place-items: center; }
+
+.term { background: var(--term-bg); color: var(--term-fg); border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.term .chrome { display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #1f2924; font-family: var(--mono); font-size: 12px; color: var(--term-dim); align-items: center; }
+.term .chrome i { width: 10px; height: 10px; border-radius: 50%; background: #2a352f; display: inline-block; }
+.term pre { margin: 0; padding: 16px 18px 20px; font-family: var(--mono); font-size: 13px; line-height: 1.35; overflow-x: auto; }
+.c-dim { color: var(--term-dim); } .c-fg { color: var(--term-fg); } .c-bold { color: #ffffff; font-weight: 500; }
+.c-t0 { color: var(--t0); } .c-t1 { color: var(--t1); } .c-t2 { color: var(--t2); } .c-t3 { color: var(--t3); } .c-t4 { color: var(--t4); }
+.c-prompt { color: var(--t3); }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.note { border-top: 2px solid var(--line); padding-top: 10px; min-width: 0; }
+.note dt { font-family: var(--mono); font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.note dd { margin: 4px 0 0; }
+
+.switcher { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 4px; background: var(--bar-bg); color: var(--bar-fg); border-radius: 999px; padding: 6px; box-shadow: 0 8px 28px rgba(0,0,0,.28); font-family: var(--mono); font-size: 13px; z-index: 20; max-width: calc(100% - 32px); }
+.switcher button { all: unset; cursor: pointer; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; font-size: 16px; }
+.switcher button:hover { background: color-mix(in srgb, var(--bar-fg) 15%, transparent); }
+.switcher button:focus-visible { outline: 2px solid var(--g3); outline-offset: 2px; }
+.switcher .label { padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: no-preference) { .swatch svg, .term pre { transition: opacity .15s; } }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">Prototype · throwaway · variant <span id="vkey">A</span> of 4</div>
+    <h1 id="vname">Arch</h1>
+    <p class="thesis" id="vthesis"></p>
+  </header>
+
+  <section>
+    <h2>Logo</h2>
+    <div class="sheet">
+      <div class="swatch on-light" id="sw-light"></div>
+      <div class="swatch on-dark" id="sw-dark"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Terminal banner, in context</h2>
+    <div class="term">
+      <div class="chrome"><i></i><i></i><i></i><span style="margin-left:8px">gb (sample output)</span></div>
+      <pre id="term"></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Trade-offs</h2>
+    <dl class="notes" id="notes"></dl>
+  </section>
+</main>
+
+<nav class="switcher" aria-label="Prototype variant switcher">
+  <button id="prev" aria-label="Previous variant">←</button>
+  <span class="label" id="blabel">A · Arch</span>
+  <button id="next" aria-label="Next variant">→</button>
+</nav>
+
+<script>
+const G = i => `var(--g${i})`;
+
+// ---- logos: each returns an SVG string at a given pixel size ----
+function svg(size, inner, vb = 120) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${vb} ${vb}" role="img" aria-label="greenbridge logo">${inner}</svg>`;
+}
+const logos = {
+  // squares climbing an arch: private (grey) on the left, public graph (green) on the right
+  A: s => {
+    const cells = [];
+    for (let i = 0; i < 7; i++) {
+      const a = Math.PI - (i * Math.PI) / 6;
+      const x = 60 + 44 * Math.cos(a) - 7, y = 82 - 44 * Math.sin(a) - 7;
+      cells.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="14" height="14" rx="2.5" fill="${G(i < 2 ? 0 : Math.min(4, i - 2))}" ${i < 2 ? 'stroke="var(--muted)" stroke-opacity=".35"' : ''}/>`);
+    }
+    return svg(s, cells.join('') + `<rect x="8" y="96" width="104" height="6" rx="3" fill="var(--fg)"/>`);
+  },
+  // suspension bridge whose deck is a row of contribution squares
+  B: s => {
+    let d = '';
+    for (let i = 0; i < 7; i++) {
+      const lvl = i < 3 ? 0 : i - 2;
+      d += `<rect x="${6 + i * 15.6}" y="70" width="13" height="13" rx="2.5" fill="${G(Math.min(lvl, 4))}" ${i < 3 ? 'stroke="var(--muted)" stroke-opacity=".35"' : ''}/>`;
+    }
+    const towers = `<rect x="26" y="28" width="5" height="62" rx="1.5" fill="var(--fg)"/><rect x="89" y="28" width="5" height="62" rx="1.5" fill="var(--fg)"/>`;
+    const cable = `<path d="M4 66 Q17 30 28.5 30 Q60 74 91.5 30 Q103 30 116 66" fill="none" stroke="var(--fg)" stroke-width="3" stroke-linecap="round"/>`;
+    return svg(s, cable + towers + d);
+  },
+  // "gb" spelled on the 7-row contribution grid
+  C: s => svg(s, monoCells(120 / 10.2), 120),
+  // app-icon tile: green square with an arch cut out, the mirror's first square under it
+  D: s => svg(s,
+    `<rect width="120" height="120" rx="28" fill="var(--g3)"/>
+     <path d="M22 94 V66 A38 38 0 0 1 98 66 V94 H82 V68 A22 22 0 0 0 38 68 V94 Z" fill="#ffffff"/>
+     <rect x="53" y="80" width="14" height="14" rx="3" fill="var(--g1)"/>`),
+};
+
+// 9 x 7 monogram grid (g, gap column, b). Shades vary like real activity.
+const MONO = [
+  ".....#...",
+  ".###.#...",
+  "#..#.###.",
+  "#..#.#..#",
+  ".###.#..#",
+  "...#.###.",
+  "###......",
+];
+const LEVEL = [
+  ".....3...",
+  ".342.4...",
+  "2..4.342.",
+  "3..3.2..4",
+  ".432.3..3",
+  "...4.423.",
+  "234......",
+];
+function monoCells(cell) {
+  const pad = cell * .14, size = cell - pad * 2;
+  const ox = (120 - cell * 9) / 2, oy = (120 - cell * 7) / 2;
+  let out = '';
+  for (let r = 0; r < 7; r++) for (let c = 0; c < 9; c++) {
+    const on = MONO[r][c] === '#';
+    out += `<rect x="${(ox + c * cell + pad).toFixed(1)}" y="${(oy + r * cell + pad).toFixed(1)}" width="${size.toFixed(1)}" height="${size.toFixed(1)}" rx="${(size * .18).toFixed(1)}" fill="${on ? G(+LEVEL[r][c]) : G(0)}"/>`;
+  }
+  return out;
+}
+
+// ---- terminal helpers ----
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const span = (cls, s) => `<span class="${cls}">${esc(s)}</span>`;
+// colour each character of a line along a grey -> green gradient by column
+function gradient(line, width) {
+  return [...line].map((ch, i) => {
+    if (ch === ' ') return ' ';
+    const t = i / Math.max(1, width - 1);
+    const lvl = t < .3 ? 0 : t < .45 ? 1 : t < .6 ? 2 : t < .78 ? 3 : 4;
+    return span(lvl === 0 ? 'c-dim' : 'c-t' + lvl, ch);
+  }).join('');
+}
+
+const banners = {
+  A: () => {
+    const L = [
+      "         ▄▄▓▓████▓▓▄▄",
+      "     ▄▓██▀▀        ▀▀██▓▄",
+      "  ▄▓█▀                  ▀█▓▄",
+      "▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+    ];
+    return L.map(l => gradient(l, 30)).join('\n') + '\n' +
+      span('c-bold', '  g r e e n b r i d g e') + span('c-dim', '   0.1.0') + '\n';
+  },
+  B: () => span('c-dim', '▫▫▫') + span('c-dim', '━━━━━━') + span('c-t2', '■') + span('c-t3', '■') + span('c-t4', '■■') +
+           '  ' + span('c-bold', 'greenbridge') + span('c-dim', ' 0.1.0 · private commits, public graph') + '\n',
+  C: () => {
+    const side = ['', '', span('c-bold', 'greenbridge') + span('c-dim', ' 0.1.0'), span('c-dim', 'private commits,'), span('c-dim', 'public graph'), '', ''];
+    const shadeCh = ['·', '░', '▒', '▓', '█'];
+    return MONO.map((row, r) => [...row].map((ch, c) => {
+      if (ch !== '#') return span('c-t0', '· ');
+      const l = +LEVEL[r][c];
+      return span('c-t' + l, shadeCh[l].repeat(2));
+    }).join('') + '   ' + side[r]).join('\n') + '\n';
+  },
+  D: () => span('c-t3', '■') + ' ' + span('c-bold', 'gb') + span('c-dim', '  greenbridge 0.1.0') + '\n',
+};
+
+const usage = `Usage:
+  gb init      set up emails, source repos, secret, and the mirror repo
+  gb plan      preview what would be mirrored (writes nothing)
+  gb sync      mirror new activity and push
+  gb backfill  alias for sync; use --since to limit history
+  gb doctor    check every precondition for squares to appear
+  gb secret    print the recovery phrase for other machines
+  gb version
+
+Run gb <command> -h for flags. Config lives in $GB_HOME or the user config dir.`;
+
+// gb plan graph, same shading rules as internal/app/graph.go, sample data
+function planGraph() {
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const weeks = 26, shades = ['·', '░', '▒', '▓', '█'];
+  const lvl = n => n === 0 ? 0 : n <= 2 ? 1 : n <= 5 ? 2 : n <= 9 ? 3 : 4;
+  const months = '      J   F    M   A   M    J  '.padEnd(weeks);
+  const labels = ['Sun', '   ', 'Tue', '   ', 'Thu', '   ', 'Sat'];
+  let out = span('c-dim', '    ' + months) + '\n';
+  for (let r = 0; r < 7; r++) {
+    let row = '';
+    for (let c = 0; c < weeks; c++) {
+      if (c === weeks - 1 && r > 4) { row += ' '; continue; }
+      const weekday = r > 0 && r < 6;
+      const n = weekday ? Math.floor(rnd() * (rnd() < .2 ? 14 : 7)) : (rnd() < .15 ? 2 : 0);
+      const l = lvl(n);
+      row += span(l === 0 ? 'c-t0' : 'c-t' + l, shades[l]);
+    }
+    out += span('c-dim', labels[r] + ' ') + row + '\n';
+  }
+  return out + span('c-dim', '    less ') + span('c-t0', '·') + span('c-t1', '░') + span('c-t2', '▒') + span('c-t3', '▓') + span('c-t4', '█') + span('c-dim', ' more') + '\n';
+}
+
+const variants = {
+  A: { name: 'Arch', thesis: 'Squares climb a bridge arch from grey (work you cannot show) to green (the graph). Banner is a 4-line arch with a column gradient, shown only on gb help and first-run gb init.',
+    notes: [['Reads as', 'A bridge first, a contribution graph second.'], ['Banner cost', '5 lines above help. Must be off for gb sync and non-TTY output.'], ['Small sizes', 'Arch squares blur under 24px; needs a simplified favicon.']] },
+  B: { name: 'Span', thesis: 'A suspension bridge whose deck is a row of contribution squares. Banner is one line, so it can sit on every command without nagging.',
+    notes: [['Reads as', 'Literal bridge; the deck carries the meaning.'], ['Banner cost', 'One line. Safe on every interactive command.'], ['Small sizes', 'Cable and towers vanish at 16px; deck alone survives.']] },
+  C: { name: 'Graph monogram', thesis: '"gb" drawn on the 7-row contribution grid, the same glyphs (· ░ ▒ ▓ █) gb plan already prints. The banner and the product output share one visual language.',
+    notes: [['Reads as', 'Unmistakably GitHub graph; "bridge" is implied, not drawn.'], ['Banner cost', '7 lines, tall. Best kept to gb init and gb help.'], ['Small sizes', '9x7 cells hold to 32px; below that it becomes a green blob.']] },
+  D: { name: 'Tile', thesis: 'App-icon tile: green square, arch cut out, first mirrored square under it. No ASCII art at all, just a one-glyph prefix. Tests whether the CLI needs a banner.',
+    notes: [['Reads as', 'Product icon; works as GitHub avatar and favicon.'], ['Banner cost', 'None. Closest to how gh, git, go behave.'], ['Small sizes', 'Best of the four; arch stays legible at 16px.']] },
+};
+const KEYS = Object.keys(variants);
+
+function render(k) {
+  const v = variants[k];
+  document.getElementById('vkey').textContent = k;
+  document.getElementById('vname').textContent = v.name;
+  document.getElementById('vthesis').textContent = v.thesis;
+  document.getElementById('blabel').textContent = `${k} · ${v.name}`;
+  const sheet = () =>
+    [128, 48, 20].map(s => `<div class="size">${logos[k](s)}<span>${s}px</span></div>`).join('') +
+    `<div class="size"><div class="avatar" style="width:56px;height:56px">${logos[k](40)}</div><span>avatar</span></div>` +
+    `<div class="lockup">${logos[k](30)}<span class="wordmark">green<b>bridge</b></span></div>`;
+  document.getElementById('sw-light').innerHTML = sheet();
+  document.getElementById('sw-dark').innerHTML = sheet();
+  document.getElementById('term').innerHTML =
+    span('c-prompt', '$ ') + 'gb help\n' + banners[k]() + '\n' + esc(usage) + '\n\n' +
+    span('c-prompt', '$ ') + 'gb plan\n' + (k === 'B' || k === 'D' ? banners[k]() + '\n' : '') + planGraph() +
+    span('c-fg', '\n412 new activities, 1,208 already mirrored, 3 repos skipped (github.com remote)');
+  document.getElementById('notes').innerHTML = v.notes.map(([t, d]) => `<div class="note"><dt>${t}</dt><dd>${d}</dd></div>`).join('');
+}
+
+function initial() {
+  const q = new URLSearchParams(location.search).get('variant');
+  const h = location.hash.slice(1).toUpperCase();
+  return KEYS.includes(q) ? q : KEYS.includes(h) ? h : 'A';
+}
+let cur = initial();
+function go(step) {
+  cur = KEYS[(KEYS.indexOf(cur) + step + KEYS.length) % KEYS.length];
+  try {
+    const u = new URL(location.href);
+    if (u.protocol === 'file:' || u.searchParams.has('variant')) u.searchParams.set('variant', cur), u.hash = '';
+    else u.hash = cur;
+    history.replaceState(null, '', u);
+  } catch (e) {}
+  render(cur);
+}
+document.getElementById('prev').onclick = () => go(-1);
+document.getElementById('next').onclick = () => go(1);
+addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, [contenteditable]')) return;
+  if (e.key === 'ArrowLeft') go(-1);
+  if (e.key === 'ArrowRight') go(1);
+});
+render(cur);
+</script>
