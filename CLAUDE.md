@@ -27,5 +27,6 @@ go tool -modfile tools.mod task --list  # everything else
 - Committable work happens in a worktree from a fresh `origin/main` (the `safe-workflow` skill).
 - Conventional commits, `type(scope): subject`. Branches `<type>/<scope>-<description>`.
 - PR bodies come from the `pr-body` skill (a hook enforces it). Evidence for a CLI is terminal output.
+- **The user tags releases.** Pushing a `v*` tag publishes binaries through `.goreleaser.yaml`; never push a tag unasked. Pull requests run a snapshot build of the same config.
 - **The user merges.** Merge commit or rebase-merge, never squash (a hook blocks it).
 - No Claude Artifacts. Pages and prototypes are local `.html` files.

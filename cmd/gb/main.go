@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -19,7 +20,19 @@ import (
 	"github.com/sorfeb/greenbridge/internal/ident"
 )
 
-var version = "dev"
+// version is set at link time by GoReleaser. Builds from go install leave it
+// empty and fall back to the module version in the build info.
+var version string
+
+func buildVersion() string {
+	if version != "" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return strings.TrimPrefix(bi.Main.Version, "v")
+	}
+	return "dev"
+}
 
 const usage = `gb: mirror private commit activity onto your GitHub graph
 
@@ -69,7 +82,7 @@ func main() {
 	case "secret":
 		err = runSecret()
 	case "version", "--version":
-		fmt.Println("gb", version)
+		fmt.Println("gb", buildVersion())
 	case "help", "-h", "--help":
 		banner(os.Stdout)
 		fmt.Print(usage)

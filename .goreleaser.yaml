@@ -1,0 +1,67 @@
+# GoReleaser v2: builds and publishes a GitHub Release when a v* tag is pushed.
+# Pull requests run a snapshot build of the same config (.github/workflows/release.yml).
+# https://goreleaser.com/customization/
+version: 2
+
+project_name: gb
+
+builds:
+  - main: ./cmd/gb
+    binary: gb
+    env:
+      - CGO_ENABLED=0 # static binaries: no libc version to match on the user's machine
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath # no build-machine paths in the binary; part of reproducibility
+    ldflags:
+      - -s -w # drop the symbol table and DWARF; smaller download, stack traces still work
+      - -X main.version={{.Version}}
+    mod_timestamp: "{{.CommitTimestamp}}" # same commit, same bytes
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}"
+    files: [README.md]
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{incpatch .Version}}-next"
+
+changelog:
+  use: github # links each entry to its commit and author
+  sort: asc
+  filters:
+    exclude:
+      - "^(build|chore|ci|docs|refactor|style|test)(\\(.+\\))?:"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+
+release:
+  prerelease: auto # v0.2.0-rc.1 is marked as a prerelease
+  footer: |
+    ## Install
+
+    Download the archive for your platform below, or with Go 1.27+:
+
+    ```sh
+    go install github.com/sorfeb/greenbridge/cmd/gb@{{.Tag}}
+    ```
+
+    Verify a download was built by this repo's release workflow:
+
+    ```sh
+    gh attestation verify gb_{{.Version}}_linux_amd64.tar.gz --repo sorfeb/greenbridge
+    ```
