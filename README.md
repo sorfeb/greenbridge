@@ -37,7 +37,7 @@ Check your employment contract before mirroring employer work. Only timestamps l
 
 ## Install
 
-Requires Go 1.23+, `git`, and the [GitHub CLI](https://cli.github.com) logged in (`gh auth login`).
+Requires Go 1.27+, `git`, and the [GitHub CLI](https://cli.github.com) logged in (`gh auth login`).
 
 ```sh
 go install github.com/sorfeb/greenbridge/cmd/gb@latest
@@ -110,13 +110,12 @@ A local sync costs about 0.5 s. Network round trips to GitHub (check the mirror,
 
 Planning lives on the maintainer's Linear board (project greenbridge). Questions and bug reports go to [GitHub issues](https://github.com/sorfeb/greenbridge/issues).
 
-Before sending a pull request, run the same checks as CI:
+Before sending a pull request, run the same checks as CI. Needs Go 1.27; dev tools (golangci-lint, Task, gotestsum, govulncheck) are pinned in `tools.mod`, so there is nothing else to install.
 
 ```sh
-gofmt -l . && go vet ./... && go test ./...
+go tool -modfile=tools.mod task check   # what CI runs
+go tool -modfile=tools.mod task fix     # auto-fix lint and formatting
 ```
-
-`gofmt -l` must print nothing.
 
 ## License
 

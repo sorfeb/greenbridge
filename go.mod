@@ -1,6 +1,6 @@
 module github.com/sorfeb/greenbridge
 
-go 1.23.1
+go 1.27
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
