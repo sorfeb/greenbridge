@@ -7,14 +7,14 @@ Rules only. Guardrails live in hooks (`.claude/hooks/`), workflows in skills (`.
 All dev tools are pinned in `tools.mod`; nothing to install but Go 1.27.
 
 ```sh
-go tool -modfile=tools.mod task check   # every CI gate: fmt-check, lint, tidy, race tests, govulncheck
-go tool -modfile=tools.mod task fix     # lint and format auto-fixes
-go tool -modfile=tools.mod task --list  # everything else
+go tool -modfile tools.mod task check   # every CI gate: fmt-check, lint, tidy, race tests, govulncheck
+go tool -modfile tools.mod task fix     # lint and format auto-fixes
+go tool -modfile tools.mod task --list  # everything else
 ```
 
 ## Conventions
 
-- `go.mod` lists only what gb ships with. Dev tools go in `tools.mod` via `go get -tool -modfile=tools.mod`.
+- `go.mod` lists only what gb ships with. Dev tools go in `tools.mod` via `go get -tool -modfile tools.mod`.
 - **Honestly green**: a red gate is fixed in the code, never by weakening the gate. A `//nolint` names the linter and says why.
 - Tests first. No tautological tests. Output that users see (banner, graph) is pinned by goldens.
 - `internal/brand/testdata/*.golden` are generated from `prototype/brand/bridges.prototype.html` on branch `prototype/brand-ascii-logo`. Change the prototype, regenerate, never hand-edit (a hook blocks it).
