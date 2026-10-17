@@ -37,8 +37,8 @@ func TestBusyMatchesPrototype(t *testing.T) {
 	}
 	lv := busy(20261016)
 	var sb strings.Builder
-	for y := 0; y < H; y++ {
-		for x := 0; x < W; x++ {
+	for y := range H {
+		for x := range W {
 			if lv[y][x] < 1 {
 				t.Fatalf("level 0 at %d,%d: every pixel must be green", x, y)
 			}
@@ -62,7 +62,7 @@ func TestPickRotatesDaily(t *testing.T) {
 		t.Errorf("seed = %d, want 20261016", s1)
 	}
 	seen := map[string]bool{}
-	for i := 0; i < len(Bridges); i++ {
+	for i := range Bridges {
 		b, _ := Pick(day.AddDate(0, 0, i))
 		seen[b.Name] = true
 	}

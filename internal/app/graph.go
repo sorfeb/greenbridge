@@ -48,16 +48,16 @@ func Graph(w io.Writer, entries []mirror.Entry, weeks int, today time.Time, pain
 	for i := range months {
 		months[i] = ' '
 	}
-	for c := 0; c < weeks; c++ {
+	for c := range weeks {
 		d := start.AddDate(0, 0, 7*c)
 		if d.Day() <= 7 {
 			months[c] = d.Format("Jan")[0]
 		}
 	}
 	fmt.Fprintf(w, "    %s\n", string(months))
-	for r := 0; r < 7; r++ {
+	for r := range 7 {
 		var b strings.Builder
-		for c := 0; c < weeks; c++ {
+		for c := range weeks {
 			d := start.AddDate(0, 0, 7*c+r)
 			if d.After(today) {
 				b.WriteString(" ")

@@ -103,7 +103,7 @@ func (g *grid) opening(x0, x1, yTop, yBase int) {
 func (g *grid) arcade(x0, x1, y0, y1, n, pier, rise int) {
 	g.rect(x0, y0, x1, y1)
 	w := float64(x1-x0+1-pier) / float64(n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		g.opening(round(float64(x0+pier)+float64(i)*w), round(float64(x0)+float64(i+1)*w)-1, y0+rise, y1)
 	}
 }

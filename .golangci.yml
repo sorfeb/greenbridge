@@ -1,0 +1,77 @@
+# golangci-lint v2. Run with `go tool -modfile=tools.mod task lint`.
+# Picked by running every linter on this repo and keeping the ones that catch
+# bugs or keep code current. Each entry says why; drop a linter only by
+# changing this file, never with a blanket nolint.
+version: "2"
+
+formatters:
+  enable:
+    - gofumpt # stricter gofmt; one canonical layout, smaller diffs
+    - gci # import groups: standard, third party, this module
+  settings:
+    gci:
+      sections: [standard, default, localmodule]
+
+linters:
+  default: none
+  enable:
+    # Bugs
+    - govet # the compiler's second opinion: printf args, copied locks, unreachable code
+    - staticcheck # the deepest single analyzer set in Go; also covers gosimple/stylecheck
+    - errcheck # an ignored error is a silent failure
+    - ineffassign # a value assigned and never read is usually a logic slip
+    - unused # dead code agents leave behind
+    - errorlint # errors.Is/As instead of == and type switches, so wrapping keeps working
+    - nilerr # returning nil right after checking err != nil
+    - musttag # structs passed to json.Unmarshal need explicit tags
+    - gosec # security: weak crypto, unsafe file perms, integer overflow
+    # Current Go
+    - modernize # rewrites to newer stdlib and language features (auto-fix)
+    - intrange # for i := range n (Go 1.22+)
+    - unconvert # conversions to the type a value already has
+    - usestdlibvars # http.MethodGet over "GET" and similar
+    # Hygiene
+    - misspell
+    - revive # golint's successor, default rules only
+    - gocritic # default checks: suspicious code and simplifications
+    - nolintlint # every //nolint names the linter and says why
+    - depguard # banned imports, see rules below
+    # Tests
+    - thelper # helpers call t.Helper() so failures point at the caller
+    - usetesting # t.TempDir, t.Setenv, t.Context over hand-rolled versions
+
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # memory layout tuning; not worth the noise for a CLI
+        - shadow # `err` reuse is idiomatic here
+    errcheck:
+      # Writes to the terminal: if stdout is gone there is nothing to report to.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    gosec:
+      excludes:
+        - G204 # running git and gh with arguments is the job of this tool
+        - G304 # reading the config and secret from a computed path is the job too
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    depguard:
+      rules:
+        banned:
+          files: ["$all"]
+          deny:
+            - pkg: github.com/pkg/errors
+              desc: use the standard errors package
+            - pkg: math/rand$
+              desc: use math/rand/v2 or crypto/rand
+
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters: [gosec]

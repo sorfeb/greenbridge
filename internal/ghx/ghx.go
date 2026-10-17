@@ -24,10 +24,14 @@ func (u User) NoreplyEmail() string {
 
 // Repo is the subset of repo metadata doctor checks.
 type Repo struct {
-	Owner            struct{ Login string } `json:"owner"`
-	IsFork           bool                   `json:"isFork"`
-	Visibility       string                 `json:"visibility"`
-	DefaultBranchRef struct{ Name string }  `json:"defaultBranchRef"`
+	Owner struct {
+		Login string `json:"login"`
+	} `json:"owner"`
+	IsFork           bool   `json:"isFork"`
+	Visibility       string `json:"visibility"`
+	DefaultBranchRef struct {
+		Name string `json:"name"`
+	} `json:"defaultBranchRef"`
 }
 
 // Email is one address on the account.

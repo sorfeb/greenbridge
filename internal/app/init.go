@@ -237,7 +237,7 @@ func Init(o InitOptions, in io.Reader, out io.Writer) error {
 
 func splitList(s string) []string {
 	var out []string
-	for _, p := range strings.Split(s, ",") {
+	for p := range strings.SplitSeq(s, ",") {
 		if p = strings.TrimSpace(p); p != "" {
 			out = append(out, p)
 		}
