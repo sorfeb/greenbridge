@@ -1,4 +1,4 @@
-# golangci-lint v2. Run with `go tool -modfile=tools.mod task lint`.
+# golangci-lint v2. Run with `go tool -modfile tools.mod task lint`.
 # Picked by running every linter on this repo and keeping the ones that catch
 # bugs or keep code current. Each entry says why; drop a linter only by
 # changing this file, never with a blanket nolint.

@@ -30,7 +30,7 @@ gh run view <run id> --log-failed
 
 Match the run to the head commit (`headSha` in `gh run view <id> --json headSha`), not to the branch name. Read from the bottom: the PR's own error is usually near the end, the first lines are runner setup.
 
-Reproduce locally with the same command the job runs (`.github/workflows/`, usually `go tool -modfile=tools.mod task check`) before pushing a fix. A fix pushed without a local reproduction is a guess that costs a CI round.
+Reproduce locally with the same command the job runs (`.github/workflows/`, usually `go tool -modfile tools.mod task check`) before pushing a fix. A fix pushed without a local reproduction is a guess that costs a CI round.
 
 ## Fix and push
 

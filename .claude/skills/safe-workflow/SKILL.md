@@ -51,7 +51,7 @@ Write the test before the code it covers; a test that restates the implementatio
 All of these pass before a commit:
 
 ```bash
-go tool -modfile=tools.mod task check
+go tool -modfile tools.mod task check
 ```
 
 If the command fails, fix the cause and rerun. Go files are formatted on every edit by a PostToolUse hook (`gofmt`), but the gate is the authority.

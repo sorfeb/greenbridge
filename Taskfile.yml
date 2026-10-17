@@ -1,9 +1,9 @@
-# Run with: go tool -modfile=tools.mod task <name>
+# Run with: go tool -modfile tools.mod task <name>
 # Dev tools are pinned in tools.mod so go.mod only lists what gb ships with.
 version: "3"
 
 vars:
-  TOOL: go tool -modfile=tools.mod
+  TOOL: go tool -modfile tools.mod
 
 tasks:
   default:

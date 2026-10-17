@@ -113,8 +113,8 @@ Planning lives on the maintainer's Linear board (project greenbridge). Questions
 Before sending a pull request, run the same checks as CI. Needs Go 1.27; dev tools (golangci-lint, Task, gotestsum, govulncheck) are pinned in `tools.mod`, so there is nothing else to install.
 
 ```sh
-go tool -modfile=tools.mod task check   # what CI runs
-go tool -modfile=tools.mod task fix     # auto-fix lint and formatting
+go tool -modfile tools.mod task check   # what CI runs
+go tool -modfile tools.mod task fix     # auto-fix lint and formatting
 ```
 
 ## License

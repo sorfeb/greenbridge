@@ -51,7 +51,7 @@ Show a before and an after, labelled `**Before:**` and `**After:**`.
 - CLI change: terminal output in a code block. Paste the `gb plan` or `gb help` output, trimmed to the lines that prove the point. No screenshots.
 - Everything else: the exact command and its output. For a fix, the test that failed and now passes.
 
-State the gate that ran (`go tool -modfile=tools.mod task check`) and its result. State what was not run and why.
+State the gate that ran (`go tool -modfile tools.mod task check`) and its result. State what was not run and why.
 
 ## Risk and rollback
 
