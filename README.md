@@ -37,7 +37,9 @@ Check your employment contract before mirroring employer work. Only timestamps l
 
 ## Install
 
-Requires Go 1.27+, `git`, and the [GitHub CLI](https://cli.github.com) logged in (`gh auth login`).
+Requires `git` and the [GitHub CLI](https://cli.github.com) logged in (`gh auth login`).
+
+Download the archive for your platform from [Releases](https://github.com/sorfeb/greenbridge/releases) and put `gb` on your `PATH`. Or, with Go 1.27+:
 
 ```sh
 go install github.com/sorfeb/greenbridge/cmd/gb@latest
