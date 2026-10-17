@@ -3,7 +3,21 @@ on:
   push:
     branches: [main]
   pull_request:
+
+# Same tasks as `go tool -modfile=tools.mod task check` locally.
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools.sum
+      - run: go tool -modfile=tools.mod task fmt-check lint tidy vuln
+
   test:
     strategy:
       matrix:
@@ -14,8 +28,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: format
-        if: runner.os != 'Windows'
-        run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
-      - run: go test ./...
+          cache-dependency-path: |
+            go.sum
+            tools.sum
+      - run: go tool -modfile=tools.mod task test

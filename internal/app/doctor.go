@@ -26,6 +26,7 @@ func (r *report) warn(msg string) { fmt.Fprintf(r.w, "[warn]       %s\n", msg) }
 func (r *report) unverified(msg, fix string) {
 	fmt.Fprintf(r.w, "[unverified] %s\n             check: %s\n", msg, fix)
 }
+
 func (r *report) fail(msg, fix string) {
 	r.fails++
 	fmt.Fprintf(r.w, "[FAIL]       %s\n             fix: %s\n", msg, fix)
