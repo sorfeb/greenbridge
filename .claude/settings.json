@@ -1,0 +1,91 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/git-freshness.mjs\"",
+            "timeout": 20,
+            "statusMessage": "Checking the root against origin/main"
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/worktree-create.mjs\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pretooluse-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Guardrails (brand goldens, squash merges)"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/git-freshness.mjs\"",
+            "if": "Bash(*git worktree add*)",
+            "timeout": 20,
+            "statusMessage": "Checking the root is current before branching"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-body-skill.mjs\"",
+            "if": "Bash(*gh pr *)",
+            "timeout": 15,
+            "statusMessage": "Checking the pr-body skill is loaded"
+          }
+        ]
+      },
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/git-freshness.mjs\"",
+            "if": "PowerShell(*git worktree add*)",
+            "timeout": 20,
+            "statusMessage": "Checking the root is current before branching"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-body-skill.mjs\"",
+            "if": "PowerShell(*gh pr *)",
+            "timeout": 15,
+            "statusMessage": "Checking the pr-body skill is loaded"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/format-go.mjs\"",
+            "timeout": 30,
+            "statusMessage": "gofumpt + gci"
+          }
+        ]
+      }
+    ]
+  }
+}
