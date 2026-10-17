@@ -73,19 +73,6 @@
           }
         ]
       }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/format-go.mjs\"",
-            "timeout": 30,
-            "statusMessage": "gofumpt + gci"
-          }
-        ]
-      }
     ]
   }
 }
