@@ -54,7 +54,7 @@ All of these pass before a commit:
 go tool -modfile tools.mod task check
 ```
 
-If the command fails, fix the cause and rerun. Go files are formatted on every edit by a PostToolUse hook (`gofmt`), but the gate is the authority.
+If the command fails, fix the cause and rerun. Formatting fails the gate: run `go tool -modfile tools.mod task fix` once before the gate, not after every edit.
 
 ### 5. Commit and push
 
