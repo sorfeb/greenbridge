@@ -1,6 +1,19 @@
-# greenbridge
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.svg">
+    <img src=".github/assets/hero-light.svg" alt="greenbridge: the Golden Gate Bridge drawn in contribution-graph squares" width="640">
+  </picture>
+</h1>
 
-Mirror commits GitHub can't see onto your GitHub contribution graph, without copying any code.
+<p align="center">Mirror commits GitHub can't see onto your GitHub contribution graph, without copying any code.</p>
+
+<p align="center">
+  <a href="https://github.com/sorfeb/greenbridge/actions/workflows/ci.yml"><img src="https://github.com/sorfeb/greenbridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/sorfeb/greenbridge/releases/latest"><img src="https://img.shields.io/github/v/release/sorfeb/greenbridge?sort=semver" alt="Latest release"></a>
+  <a href="https://pkg.go.dev/github.com/sorfeb/greenbridge"><img src="https://pkg.go.dev/badge/github.com/sorfeb/greenbridge.svg" alt="Go reference"></a>
+  <a href="https://goreportcard.com/report/github.com/sorfeb/greenbridge"><img src="https://goreportcard.com/badge/github.com/sorfeb/greenbridge" alt="Go Report Card"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/sorfeb/greenbridge" alt="MIT license"></a>
+</p>
 
 Work on an employer GitLab, a self-hosted Forgejo, or an on-prem server never reaches your GitHub graph. `gb` reads commit metadata from your local clones and writes one empty, backdated commit per real commit to a private mirror repo you own. GitHub then counts those commits like any other.
 
@@ -10,6 +23,7 @@ Work on an employer GitLab, a self-hosted Forgejo, or an on-prem server never re
 - [Background](#background)
 - [Install](#install)
 - [Usage](#usage)
+- [The bridge of the day](#the-bridge-of-the-day)
 - [What counts](#what-counts)
 - [Keeping the graph current](#keeping-the-graph-current)
 - [Limitations](#limitations)
@@ -47,6 +61,14 @@ go install github.com/sorfeb/greenbridge/cmd/gb@latest
 
 While this repo is private, set `GOPRIVATE=github.com/sorfeb/*` first, or run `go install ./cmd/gb` from a clone.
 
+### Verify a download
+
+Each release ships `checksums.txt`, an SBOM per archive, and a GitHub build provenance attestation. To confirm an archive was built by this repo's release workflow and not uploaded by hand:
+
+```sh
+gh attestation verify gb_<version>_linux_amd64.tar.gz --repo sorfeb/greenbridge
+```
+
 ## Usage
 
 ```sh
@@ -72,6 +94,15 @@ gb doctor                                    # explain missing squares
 - **Several machines** can sync into one mirror. Run `gb secret` on the first, then `gb init --secret <phrase>` on the second. A different secret produces different IDs and double counts.
 - **Private mirror:** turn on **Include private contributions on my profile** at <https://github.com/settings/profile>. `gb doctor` reports this setting as unverified, since no GitHub API exposes it.
 - `GB_HOME` overrides the config directory.
+
+## The bridge of the day
+
+`gb help`, `gb init`, and a bare `gb` open with a famous bridge in contribution-graph squares. The bridge and its greens change once a day and match for everyone on that day. Pipes and scripts get plain text.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/bridges-dark.svg">
+  <img src=".github/assets/bridges-light.svg" alt="The ten bridges gb rotates through: Golden Gate, Brooklyn, Tower Bridge, Sydney Harbour, Pont du Gard, Ponte Vecchio, Rialto, Forth Bridge, Millau Viaduct, and Charles Bridge" width="528">
+</picture>
 
 ## What counts
 
@@ -110,9 +141,7 @@ A local sync costs about 0.5 s. Network round trips to GitHub (check the mirror,
 
 ## Contributing
 
-Planning lives on the maintainer's Linear board (project greenbridge). Questions and bug reports go to [GitHub issues](https://github.com/sorfeb/greenbridge/issues).
-
-Before sending a pull request, run the same checks as CI. Needs Go 1.27; dev tools (golangci-lint, Task, gotestsum, govulncheck) are pinned in `tools.mod`, so there is nothing else to install.
+Questions and bug reports go to [GitHub issues](https://github.com/sorfeb/greenbridge/issues); security reports go through [SECURITY.md](SECURITY.md). See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and conventions. In short, with Go 1.27 and nothing else installed:
 
 ```sh
 go tool -modfile tools.mod task check   # what CI runs
@@ -121,4 +150,4 @@ go tool -modfile tools.mod task fix     # auto-fix lint and formatting
 
 ## License
 
-No license chosen yet. Until one is added, all rights are reserved by the author.
+[MIT](LICENSE)
