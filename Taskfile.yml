@@ -42,6 +42,10 @@ tasks:
     desc: Tests with the race detector, in random order
     cmds: ["{{.TOOL}} gotestsum --format pkgname -- -race -shuffle=on ./..."]
 
+  art:
+    desc: Regenerate README art and the social preview from internal/brand
+    cmds: [go generate ./internal/brand]
+
   vuln:
     desc: Known vulnerabilities in code gb actually calls
     cmds: ["{{.TOOL}} govulncheck ./..."]
