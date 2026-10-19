@@ -18,6 +18,7 @@ go tool -modfile tools.mod task --list  # everything else
 - **Honestly green**: a red gate is fixed in the code, never by weakening the gate. A `//nolint` names the linter and says why.
 - Tests first. No tautological tests. Output that users see (banner, graph) is pinned by goldens.
 - `internal/brand/testdata/*.golden` are generated from `prototype/brand/bridges.prototype.html` on branch `prototype/brand-ascii-logo`. Change the prototype, regenerate, never hand-edit (a hook blocks it).
+- `.github/assets/` (README art, social preview) is generated from `internal/brand/art.go` by `task art`; a test fails when it is stale.
 - Nothing about a user's work leaves the machine except timestamps and opaque IDs. Any change to what a mirror commit carries needs an issue first.
 - Terminal output degrades to plain text when the stream is not a terminal. Never print color or banners into a pipe.
 
