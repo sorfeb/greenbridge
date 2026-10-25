@@ -1,5 +1,5 @@
 # Run with: go tool -modfile tools.mod task <name>
-# Dev tools are pinned in tools.mod so go.mod only lists what gb ships with.
+# Dev tools are pinned in tools.mod so go.mod only lists what gbridge ships with.
 version: "3"
 
 vars:
@@ -47,5 +47,5 @@ tasks:
     cmds: [go generate ./internal/brand]
 
   vuln:
-    desc: Known vulnerabilities in code gb actually calls
+    desc: Known vulnerabilities in code gbridge actually calls
     cmds: ["{{.TOOL}} govulncheck ./..."]

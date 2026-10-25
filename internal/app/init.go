@@ -18,7 +18,7 @@ import (
 	"github.com/sorfeb/greenbridge/internal/source"
 )
 
-// InitOptions are gb init flags. Anything left empty is asked for, unless
+// InitOptions are gbridge init flags. Anything left empty is asked for, unless
 // Yes is set, in which case defaults apply.
 type InitOptions struct {
 	Emails        []string
@@ -167,7 +167,7 @@ func Init(o InitOptions, in io.Reader, out io.Writer) error {
 		if err := ident.Save(sp, s); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "\nRecovery phrase (store it in your password manager; use gb init --secret on other machines):\n  %s\n\n", ident.Encode(s))
+		fmt.Fprintf(out, "\nRecovery phrase (store it in your password manager; use gbridge init --secret on other machines):\n  %s\n\n", ident.Encode(s))
 	}
 
 	// Author and mirror.
@@ -231,7 +231,7 @@ func Init(o InitOptions, in io.Reader, out io.Writer) error {
 	if cfg.Mirror.Visibility == "private" && !o.LocalOnly {
 		fmt.Fprintf(out, "Private mirror: turn on private contributions at %s\n", PrivateContribSettings)
 	}
-	fmt.Fprintln(out, "Next: gb plan (preview), then gb sync.")
+	fmt.Fprintln(out, "Next: gbridge plan (preview), then gbridge sync.")
 	return nil
 }
 

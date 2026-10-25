@@ -130,7 +130,7 @@ func gallerySVG(dark bool) []byte {
 	w, h := cols*colW+(cols-1)*colGap, rows*rowH-20
 	var sb strings.Builder
 	fmt.Fprintf(&sb, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" role="img">`+"\n", w, h, w, h)
-	sb.WriteString("<title>The bridges gb rotates through, one per day</title>\n")
+	sb.WriteString("<title>The bridges gbridge rotates through, one per day</title>\n")
 	fmt.Fprintf(&sb, `<g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="13" fill="%s">`+"\n", p.muted)
 	for i, b := range Bridges {
 		ox, oy := (i%cols)*(colW+colGap), (i/cols)*rowH
