@@ -1,6 +1,7 @@
 /gbridge
 /gbridge.exe
 /dist/
+/completions/
 /.claude/worktrees/
 /.claude/settings.local.json
 /CLAUDE.local.md
