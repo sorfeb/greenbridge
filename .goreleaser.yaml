@@ -5,6 +5,17 @@ version: 2
 
 project_name: gbridge
 
+# Shell completion scripts ship in every archive. Hooks run without a shell,
+# so each redirect goes through sh (release.yml runs on ubuntu).
+before:
+  hooks:
+    - rm -rf completions
+    - mkdir completions
+    - sh -c "go run ./cmd/gbridge completion bash > completions/gbridge.bash"
+    - sh -c "go run ./cmd/gbridge completion zsh > completions/_gbridge"
+    - sh -c "go run ./cmd/gbridge completion fish > completions/gbridge.fish"
+    - sh -c "go run ./cmd/gbridge completion powershell > completions/gbridge.ps1"
+
 builds:
   - main: ./cmd/gbridge
     binary: gbridge
@@ -25,7 +36,7 @@ archives:
       - goos: windows
         formats: [zip]
     name_template: "{{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}"
-    files: [README.md, LICENSE]
+    files: [README.md, LICENSE, completions/*]
 
 checksum:
   name_template: checksums.txt

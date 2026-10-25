@@ -90,12 +90,26 @@ gbridge doctor                                    # explain missing squares
 | `gbridge backfill` | Alias for `sync`, for recovering past work | `--since` |
 | `gbridge doctor` | Checks every condition GitHub needs to show a square | |
 | `gbridge secret` | Prints the recovery phrase for a second machine | |
+| `gbridge completion` | Prints a tab-completion script | `bash`, `zsh`, `fish`, `powershell` |
 
 - **Past work** is recovered on the first sync, as far back as your clones go.
 - **Reruns are safe.** `gbridge sync` reads already-synced IDs back from the mirror's log. There is no state file.
 - **Several machines** can sync into one mirror. Run `gbridge secret` on the first, then `gbridge init --secret <phrase>` on the second. A different secret produces different IDs and double counts.
 - **Private mirror:** turn on **Include private contributions on my profile** at <https://github.com/settings/profile>. `gbridge doctor` reports this setting as unverified, since no GitHub API exposes it.
 - `GBRIDGE_HOME` overrides the config directory.
+
+### Tab completion
+
+Completes commands, each command's flags, and directories after `--repo` and `--scan`. Add one line for your shell:
+
+| Shell | Add |
+|---|---|
+| bash | `source <(gbridge completion bash)` to `~/.bashrc` |
+| zsh | `source <(gbridge completion zsh)` to `~/.zshrc`, after `compinit` |
+| fish | Run once: `gbridge completion fish > ~/.config/fish/completions/gbridge.fish` |
+| PowerShell | `gbridge completion powershell \| Out-String \| Invoke-Expression` to `$PROFILE` |
+
+Release archives also include the four scripts under `completions/`.
 
 ## The bridge of the day
 
