@@ -1,11 +1,11 @@
 // WorktreeCreate hook: start every agent worktree from a fresh origin/main.
 //
-//   echo '{"name": "fix/sor-123-login"}' | node .claude/hooks/worktree-create.mjs
+//   echo '{"name": "fix/18-doctor-hint"}' | node .claude/hooks/worktree-create.mjs
 //
 // Claude Code's own worktree branches from whatever origin/main last held
 // locally and names the branch `worktree-<name>`. This fetches first and fails
 // rather than fall back to a stale base, and
-// the branch takes the name as given, so `fix/sor-123-login` follows the
+// the branch takes the name as given, so `fix/18-doctor-hint` follows the
 // repo's branch convention; the directory flattens `/` to `+`.
 //
 // The hook replaces Claude Code's handling of `.worktreeinclude`, so it copies
