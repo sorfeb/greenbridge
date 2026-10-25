@@ -3,19 +3,41 @@ on:
   push:
     branches: [main]
   pull_request:
+
+# Same tasks as `go tool -modfile tools.mod task check` locally.
+# Actions are pinned to commit SHAs; Dependabot bumps them.
+permissions:
+  contents: read
+
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools.sum
+      - run: go tool -modfile tools.mod task fmt-check lint tidy vuln
+
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: format
-        if: runner.os != 'Windows'
-        run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
-      - run: go test ./...
+          cache-dependency-path: |
+            go.sum
+            tools.sum
+      - run: go tool -modfile tools.mod task test

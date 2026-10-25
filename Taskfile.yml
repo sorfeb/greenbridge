@@ -1,0 +1,51 @@
+# Run with: go tool -modfile tools.mod task <name>
+# Dev tools are pinned in tools.mod so go.mod only lists what gbridge ships with.
+version: "3"
+
+vars:
+  TOOL: go tool -modfile tools.mod
+
+tasks:
+  default:
+    cmds: [task: check]
+
+  check:
+    desc: Every gate CI runs, in the same order
+    cmds:
+      - task: fmt-check
+      - task: lint
+      - task: tidy
+      - task: test
+      - task: vuln
+
+  fmt:
+    desc: Format and fix imports
+    cmds: ["{{.TOOL}} golangci-lint fmt ./..."]
+
+  fmt-check:
+    desc: Fail if anything is unformatted
+    cmds: ["{{.TOOL}} golangci-lint fmt --diff ./..."]
+
+  lint:
+    desc: Lint with .golangci.yml (includes go vet)
+    cmds: ["{{.TOOL}} golangci-lint run ./..."]
+
+  fix:
+    desc: Apply lint and format auto-fixes
+    cmds: ["{{.TOOL}} golangci-lint run --fix ./..."]
+
+  tidy:
+    desc: Fail if go.mod or go.sum is out of date
+    cmds: [go mod tidy -diff]
+
+  test:
+    desc: Tests with the race detector, in random order
+    cmds: ["{{.TOOL}} gotestsum --format pkgname -- -race -shuffle=on ./..."]
+
+  art:
+    desc: Regenerate README art and the social preview from internal/brand
+    cmds: [go generate ./internal/brand]
+
+  vuln:
+    desc: Known vulnerabilities in code gbridge actually calls
+    cmds: ["{{.TOOL}} govulncheck ./..."]

@@ -1,0 +1,33 @@
+name: Bug report
+description: gbridge did something wrong or missed commits it should mirror
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: gbridge doctor output
+      description: Run `gbridge doctor` and paste the output. Remove anything private first.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: gbridge version
+      placeholder: gbridge 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options: [Linux, macOS, Windows]
+    validations:
+      required: true

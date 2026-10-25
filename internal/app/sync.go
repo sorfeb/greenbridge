@@ -1,4 +1,4 @@
-// Package app wires sources, identity, and the mirror into gb commands.
+// Package app wires sources, identity, and the mirror into gbridge commands.
 package app
 
 import (
@@ -107,7 +107,7 @@ func Sync(cfg *config.Config, secret []byte, opt SyncOptions, log io.Writer) (*S
 	if err := m.Ensure(); err != nil {
 		return nil, err
 	}
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		tip, err := m.Fetch()
 		if err != nil {
 			return nil, err
@@ -134,5 +134,5 @@ func Sync(cfg *config.Config, secret []byte, opt SyncOptions, log io.Writer) (*S
 		res.Pushed = true
 		return res, nil
 	}
-	return nil, errors.New("push kept failing after 3 attempts; run gb doctor")
+	return nil, errors.New("push kept failing after 3 attempts; run gbridge doctor")
 }
