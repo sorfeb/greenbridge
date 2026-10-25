@@ -34,24 +34,42 @@ func buildVersion() string {
 	return "dev"
 }
 
-const usage = `gbridge: mirror private commit activity onto your GitHub graph
+// command is one gbridge subcommand. flags builds the flag set the command
+// parses, bound to throwaway targets; completion scripts are generated from
+// it, so a new flag can't drift out of them. nil means no flags.
+type command struct {
+	name, summary string
+	flags         func() *flag.FlagSet
+}
 
-Usage:
-  gbridge init      set up emails, source repos, secret, and the mirror repo
-  gbridge plan      preview what would be mirrored (writes nothing)
-  gbridge sync      mirror new activity and push
-  gbridge backfill  alias for sync; use --since to limit history
-  gbridge doctor    check every precondition for squares to appear
-  gbridge secret    print the recovery phrase for other machines
-  gbridge version
+var commands = []command{
+	{"init", "set up emails, source repos, secret, and the mirror repo", func() *flag.FlagSet { return new(initFlags).set() }},
+	{"plan", "preview what would be mirrored (writes nothing)", func() *flag.FlagSet { return new(planFlags).set() }},
+	{"sync", "mirror new activity and push", func() *flag.FlagSet { return new(syncFlags).set("sync") }},
+	{"backfill", "alias for sync; use --since to limit history", func() *flag.FlagSet { return new(syncFlags).set("backfill") }},
+	{"doctor", "check every precondition for squares to appear", nil},
+	{"secret", "print the recovery phrase for other machines", nil},
+	{"completion", "print a shell completion script: " + strings.Join(shells, ", "), nil},
+	{"version", "print the version", nil},
+}
 
-Run gbridge <command> -h for flags. Config lives in $GBRIDGE_HOME or the user config dir.
-`
+func usage() string {
+	var b strings.Builder
+	b.WriteString("gbridge: mirror private commit activity onto your GitHub graph\n\nUsage:\n")
+	for _, c := range commands {
+		fmt.Fprintf(&b, "  gbridge %-10s  %s\n", c.name, c.summary)
+	}
+	b.WriteString("\nRun gbridge <command> -h for flags. Config lives in $GBRIDGE_HOME or the user config dir.\n")
+	return b.String()
+}
 
 type list []string
 
 func (l *list) String() string     { return strings.Join(*l, ",") }
 func (l *list) Set(v string) error { *l = append(*l, v); return nil }
+
+// pathList is a list of directories; completion offers directory names for it.
+type pathList struct{ list }
 
 // banner prints the bridge of the day, only when f is a terminal, so pipes
 // and scripts see plain output.
@@ -64,7 +82,7 @@ func banner(f *os.File) {
 func main() {
 	if len(os.Args) < 2 {
 		banner(os.Stderr)
-		fmt.Fprint(os.Stderr, usage)
+		fmt.Fprint(os.Stderr, usage())
 		os.Exit(2)
 	}
 	var err error
@@ -81,13 +99,15 @@ func main() {
 		}
 	case "secret":
 		err = runSecret()
+	case "completion":
+		err = runCompletion(os.Stdout, args)
 	case "version", "--version":
 		fmt.Println("gbridge", buildVersion())
 	case "help", "-h", "--help":
 		banner(os.Stdout)
-		fmt.Print(usage)
+		fmt.Print(usage())
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s", cmd, usage)
+		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s", cmd, usage())
 		os.Exit(2)
 	}
 	if err != nil {
@@ -96,26 +116,35 @@ func main() {
 	}
 }
 
-func runInit(args []string) error {
+type initFlags struct {
+	o           app.InitOptions
+	emails      list
+	repos, scan pathList
+}
+
+func (f *initFlags) set() *flag.FlagSet {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
-	var o app.InitOptions
-	var emails, repos, scan list
-	fs.Var(&emails, "email", "work email to match (repeatable)")
-	fs.Var(&repos, "repo", "source repo path (repeatable)")
-	fs.Var(&scan, "scan", "folder to search for repos (repeatable)")
-	fs.BoolVar(&o.IncludeGitHub, "include-github", false, "include repos with a github.com remote (double counts)")
-	fs.StringVar(&o.MirrorName, "mirror", "", "mirror repo name (default greenbridge-activity)")
-	fs.BoolVar(&o.LocalOnly, "local-only", false, "keep the mirror local; create nothing on GitHub")
-	fs.BoolVar(&o.Public, "public", false, "public mirror with date-only timestamps")
-	fs.StringVar(&o.Secret, "secret", "", "recovery phrase from another machine")
-	fs.StringVar(&o.AuthorName, "author-name", "", "mirror commit author name (default GitHub login)")
-	fs.StringVar(&o.AuthorEmail, "author-email", "", "mirror commit author email (default GitHub noreply)")
-	fs.BoolVar(&o.Yes, "yes", false, "accept defaults without prompting")
-	fs.BoolVar(&o.Force, "force", false, "replace existing config or secret")
-	_ = fs.Parse(args)
-	o.Emails, o.Repos, o.Scan = emails, repos, scan
+	fs.Var(&f.emails, "email", "work email to match (repeatable)")
+	fs.Var(&f.repos, "repo", "source repo path (repeatable)")
+	fs.Var(&f.scan, "scan", "folder to search for repos (repeatable)")
+	fs.BoolVar(&f.o.IncludeGitHub, "include-github", false, "include repos with a github.com remote (double counts)")
+	fs.StringVar(&f.o.MirrorName, "mirror", "", "mirror repo name (default greenbridge-activity)")
+	fs.BoolVar(&f.o.LocalOnly, "local-only", false, "keep the mirror local; create nothing on GitHub")
+	fs.BoolVar(&f.o.Public, "public", false, "public mirror with date-only timestamps")
+	fs.StringVar(&f.o.Secret, "secret", "", "recovery phrase from another machine")
+	fs.StringVar(&f.o.AuthorName, "author-name", "", "mirror commit author name (default GitHub login)")
+	fs.StringVar(&f.o.AuthorEmail, "author-email", "", "mirror commit author email (default GitHub noreply)")
+	fs.BoolVar(&f.o.Yes, "yes", false, "accept defaults without prompting")
+	fs.BoolVar(&f.o.Force, "force", false, "replace existing config or secret")
+	return fs
+}
+
+func runInit(args []string) error {
+	var f initFlags
+	_ = f.set().Parse(args)
+	f.o.Emails, f.o.Repos, f.o.Scan = f.emails, f.repos.list, f.scan.list
 	banner(os.Stdout)
-	return app.Init(o, os.Stdin, os.Stdout)
+	return app.Init(f.o, os.Stdin, os.Stdout)
 }
 
 func load() (*config.Config, []byte, error) {
@@ -142,17 +171,28 @@ func parseSince(s string) (time.Time, error) {
 	return t, nil
 }
 
-func runPlan(args []string) error {
+type planFlags struct {
+	since   string
+	weeks   int
+	offline bool
+}
+
+func (f *planFlags) set() *flag.FlagSet {
 	fs := flag.NewFlagSet("plan", flag.ExitOnError)
-	since := fs.String("since", "", "only commits on or after YYYY-MM-DD")
-	weeks := fs.Int("weeks", 53, "weeks shown in the graph")
-	offline := fs.Bool("offline", false, "skip fetching the mirror")
-	_ = fs.Parse(args)
+	fs.StringVar(&f.since, "since", "", "only commits on or after YYYY-MM-DD")
+	fs.IntVar(&f.weeks, "weeks", 53, "weeks shown in the graph")
+	fs.BoolVar(&f.offline, "offline", false, "skip fetching the mirror")
+	return fs
+}
+
+func runPlan(args []string) error {
+	var f planFlags
+	_ = f.set().Parse(args)
 	cfg, secret, err := load()
 	if err != nil {
 		return err
 	}
-	t, err := parseSince(*since)
+	t, err := parseSince(f.since)
 	if err != nil {
 		return err
 	}
@@ -174,7 +214,7 @@ func runPlan(args []string) error {
 	fmt.Println()
 
 	m := app.MirrorOf(cfg)
-	if *offline {
+	if f.offline {
 		m.Remote = ""
 	}
 	if err := m.Ensure(); err != nil {
@@ -191,30 +231,40 @@ func runPlan(args []string) error {
 	fmt.Printf("already in mirror: %d, would add: %d\n\n", len(ledger), len(app.Diff(d.Entries, ledger)))
 	app.YearTable(os.Stdout, d.Entries)
 	fmt.Println()
-	app.Graph(os.Stdout, d.Entries, *weeks, time.Now(), brand.Paint(lipgloss.NewRenderer(os.Stdout)))
+	app.Graph(os.Stdout, d.Entries, f.weeks, time.Now(), brand.Paint(lipgloss.NewRenderer(os.Stdout)))
 	return nil
 }
 
-func runSync(name string, args []string) error {
+type syncFlags struct {
+	since       string
+	dry, noPush bool
+}
+
+func (f *syncFlags) set(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	since := fs.String("since", "", "only commits on or after YYYY-MM-DD")
-	dry := fs.Bool("dry-run", false, "compute only, write nothing")
-	noPush := fs.Bool("no-push", false, "write the local mirror, skip push")
-	_ = fs.Parse(args)
+	fs.StringVar(&f.since, "since", "", "only commits on or after YYYY-MM-DD")
+	fs.BoolVar(&f.dry, "dry-run", false, "compute only, write nothing")
+	fs.BoolVar(&f.noPush, "no-push", false, "write the local mirror, skip push")
+	return fs
+}
+
+func runSync(name string, args []string) error {
+	var f syncFlags
+	_ = f.set(name).Parse(args)
 	cfg, secret, err := load()
 	if err != nil {
 		return err
 	}
-	t, err := parseSince(*since)
+	t, err := parseSince(f.since)
 	if err != nil {
 		return err
 	}
-	res, err := app.Sync(cfg, secret, app.SyncOptions{Since: t, DryRun: *dry, NoPush: *noPush}, os.Stderr)
+	res, err := app.Sync(cfg, secret, app.SyncOptions{Since: t, DryRun: f.dry, NoPush: f.noPush}, os.Stderr)
 	if err != nil {
 		return err
 	}
 	verb := "added"
-	if *dry {
+	if f.dry {
 		verb = "would add"
 	}
 	fmt.Printf("%d desired, %d already mirrored, %s %d", res.Desired, res.Existing, verb, res.Added)
