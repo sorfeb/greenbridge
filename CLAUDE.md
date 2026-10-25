@@ -24,9 +24,10 @@ go tool -modfile tools.mod task --list  # everything else
 
 ## Workflow
 
-- Planning lives on Linear, team s11o, project greenbridge (`SOR-*`).
+- Planning lives in GitHub Issues. The pinned roadmap (issue #8) holds the non-negotiables, settled decisions, and the work lanes, each lane owning a set of files. Labels: `area: *`, `priority: *`, plus `refactor`, `research`, `decision`, `launch`. Milestones are releases.
+- Name the kind with every number: "issue #15", "PR #7". Issues and PRs share one number space.
 - Committable work happens in a worktree from a fresh `origin/main` (the `safe-workflow` skill).
-- Conventional commits, `type(scope): subject`. Branches `<type>/<scope>-<description>`.
+- Conventional commits, `type(scope): subject`. Branches `<type>/<issue>-<description>`, for example `feat/15-hook-installer`; `<type>/<scope>-<description>` when there's no issue.
 - PR bodies come from the `pr-body` skill (a hook enforces it). Evidence for a CLI is terminal output.
 - **The user tags releases.** Pushing a `v*` tag publishes binaries through `.goreleaser.yaml`; never push a tag unasked. Pull requests run a snapshot build of the same config.
 - **The user merges.** Merge commit or rebase-merge, never squash (a hook blocks it).

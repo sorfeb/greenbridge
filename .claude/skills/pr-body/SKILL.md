@@ -17,7 +17,7 @@ Three sections, in this order, with these headings:
 ## Risk and rollback
 ```
 
-Name the Linear issue on the first line of the Summary (`Fixes SOR-123`, or `Refs SOR-123` for one part of it).
+Name the GitHub issue on the first line of the Summary (`Closes #15`, or `Refs #15` for one part of it). Always write the kind with a number in prose: "issue #15", "PR #7".
 
 ## Summary
 

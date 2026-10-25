@@ -1,6 +1,6 @@
 ---
 name: safe-workflow
-description: The order of work in greenbridge from a Linear issue to an honestly green pull request - issue, worktree, change, local gates, commit, push, PR, CI, handover, post-merge. Use when starting any task or SOR-* issue that changes tracked files, and when a PR's CI is red. Not for read-only work, deploys, or merging; the merge belongs to the user.
+description: The order of work in greenbridge from a GitHub issue to an honestly green pull request - issue, worktree, change, local gates, commit, push, PR, CI, handover, post-merge. Use when starting any task or GitHub issue that changes tracked files, and when a PR's CI is red. Not for read-only work, deploys, or merging; the merge belongs to the user.
 ---
 
 # Safe workflow
@@ -25,7 +25,17 @@ Done when every job is green, or every red job has been reported to the user wit
 
 ### 1. Issue
 
-Work traces to a Linear issue in the `s11o` team, `greenbridge` project. Set it `In Progress` before creating the worktree, so two sessions do not pick up the same thing. Check for an open PR or a `*sor-<n>*` branch first; continue only when there is none.
+Work traces to a GitHub issue. Read it, and the pinned roadmap (issue #8) for its lane: stay inside the lane's files.
+
+Claim it before creating the worktree, so two sessions don't pick up the same thing:
+
+```bash
+gh issue develop <n> --list                          # a linked branch means someone has it
+gh pr list --state open --search "<n> in:body"       # so does an open PR
+gh issue develop <n> --name <type>/<n>-<description> --base main   # claim: links the branch on the issue
+```
+
+Continue only when the first two come back empty. The branch `gh issue develop` creates on the remote points at `main`; the worktree in step 2 builds on it.
 
 A small fix found mid-task (a typo, a broken test) needs no issue. Ask before creating a new issue.
 
@@ -33,7 +43,7 @@ A small fix found mid-task (a typo, a broken test) needs no issue. Ask before cr
 
 The root checkout is shared with the user's dev environment and other sessions. Leave its HEAD alone.
 
-Enter through Claude Code's worktree tool with the branch name as the worktree name: Linear's generated name when the issue has one, else `<type>/<scope>-<description>`. The `WorktreeCreate` hook (`.claude/hooks/worktree-create.mjs`) fetches `origin/main`, branches from it under exactly that name, copies the `.worktreeinclude` files when that file exists, and fails rather than use a stale base.
+Enter through Claude Code's worktree tool with the branch name as the worktree name: the `<type>/<n>-<description>` claimed in step 1, else `<type>/<scope>-<description>`. The `WorktreeCreate` hook (`.claude/hooks/worktree-create.mjs`) fetches `origin/main`, branches from it under exactly that name, copies the `.worktreeinclude` files when that file exists, and fails rather than use a stale base.
 
 By hand, the trailing `origin/main` is not optional:
 
@@ -68,7 +78,7 @@ Stage by path, never `git add -A`: other sessions share the tree. New commits, n
 
 Load the `pr-body` skill and write the body from it. A hook denies `gh pr create` and body edits until it has loaded.
 
-Name the issue in the body (`Fixes SOR-123`) so Linear links it.
+Name the issue on the body's first line: `Closes #<n>`, or `Refs #<n>` for one part of it. GitHub closes the issue when the PR merges into `main`; a PR stacked on another branch closes nothing until its own merge reaches `main`.
 
 ### 7. CI
 
@@ -81,5 +91,5 @@ Give the user the PR link, each job's result, what was not run, and every gate c
 ### 9. After the merge
 
 - `git merge-base --is-ancestor <your last sha> origin/main` confirms the merge captured every pushed commit.
-- Set the Linear issue `Done`.
+- Check the issue closed (`gh issue view <n>`). If the PR used `Refs`, leave it open and tick its box in the roadmap.
 - Remove the worktree. After the merge, never at the end of the task.
