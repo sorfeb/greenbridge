@@ -94,7 +94,7 @@ func Decode(phrase string) ([]byte, error) {
 func Load(path string) ([]byte, error) {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("no secret at %s: run gb init", path)
+		return nil, fmt.Errorf("no secret at %s: run gbridge init", path)
 	}
 	if err != nil {
 		return nil, err

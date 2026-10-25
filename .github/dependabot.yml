@@ -1,0 +1,27 @@
+# Weekly update PRs for gbridge's dependencies and the pinned workflow actions.
+# Dependabot does not read tools.mod; update dev tools with go get -tool -modfile tools.mod.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14 # skip releases younger than two weeks; most malicious versions are pulled sooner
+    groups:
+      go:
+        patterns: ["*"]
+    commit-message:
+      prefix: build
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci

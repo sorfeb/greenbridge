@@ -37,7 +37,7 @@ func Scan(repo string, emails []string, since time.Time) ([]Activity, error) {
 		return nil, err
 	}
 	var acts []Activity
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

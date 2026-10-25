@@ -85,7 +85,7 @@ func (m Mirror) Ledger(tip string) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, s := range strings.Split(out, "\n") {
+	for s := range strings.SplitSeq(out, "\n") {
 		if id := ParseSubject(s); id != "" {
 			ids[id] = true
 		}

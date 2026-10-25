@@ -1,4 +1,4 @@
-// Package brand draws the gb banner: a famous bridge in square pixels,
+// Package brand draws the gbridge banner: a famous bridge in square pixels,
 // coloured like a busy contribution graph. The bridge and its greens change
 // once a day and are the same for every run and every user on that day.
 package brand
@@ -17,7 +17,7 @@ import (
 func Pick(day time.Time) (Bridge, uint32) {
 	y, m, d := day.Date()
 	days := time.Date(y, m, d, 0, 0, 0, 0, time.UTC).Unix() / 86400
-	return Bridges[days%int64(len(Bridges))], uint32(y*10000 + int(m)*100 + d)
+	return Bridges[days%int64(len(Bridges))], uint32(y*10000 + int(m)*100 + d) //nolint:gosec // YYYYMMDD fits uint32 until year 429496
 }
 
 // mulberry32, matching the prototype so a seed draws the same greens.
@@ -47,9 +47,9 @@ func busy(seed uint32) [H][W]int {
 		}
 	}
 	var lv [H][W]int
-	for y := 0; y < H; y++ {
+	for y := range H {
 		weekend := y%7 == 0 || y%7 == 6
-		for x := 0; x < W; x++ {
+		for x := range W {
 			v := week[x] * (.5 + .7*r.next())
 			if weekend {
 				v -= .2
@@ -101,8 +101,8 @@ func rows(b Bridge, lv [H][W]int, paint Painter) []string {
 	out := make([]string, 0, H/2)
 	for y := 0; y < H; y += 2 {
 		var sb strings.Builder
-		for x := 0; x < W; x++ {
-			top, bot := g[y][x], y+1 < H && g[y+1][x]
+		for x := range W {
+			top, bot := g[y][x], g[y+1][x] //nolint:gosec // G602 false positive: y steps by 2 over an even H
 			switch {
 			case top && bot:
 				sb.WriteString(paint(lv[y][x], "█"))

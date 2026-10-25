@@ -39,9 +39,9 @@ type Config struct {
 	NoticeAccepted     bool     `json:"notice_accepted"`
 }
 
-// Dir is the greenbridge home: $GB_HOME, else <user config dir>/greenbridge.
+// Dir is the greenbridge home: $GBRIDGE_HOME, else <user config dir>/greenbridge.
 func Dir() (string, error) {
-	if d := os.Getenv("GB_HOME"); d != "" {
+	if d := os.Getenv("GBRIDGE_HOME"); d != "" {
 		return d, nil
 	}
 	base, err := os.UserConfigDir()
@@ -85,7 +85,7 @@ func Load() (*Config, error) {
 	}
 	b, err := os.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("no config at %s: run gb init", p)
+		return nil, fmt.Errorf("no config at %s: run gbridge init", p)
 	}
 	if err != nil {
 		return nil, err
