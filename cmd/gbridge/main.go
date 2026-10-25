@@ -1,4 +1,4 @@
-// Command gb mirrors the timing of private or work commits onto your GitHub
+// Command gbridge mirrors the timing of private or work commits onto your GitHub
 // contribution graph.
 package main
 
@@ -34,18 +34,18 @@ func buildVersion() string {
 	return "dev"
 }
 
-const usage = `gb: mirror private commit activity onto your GitHub graph
+const usage = `gbridge: mirror private commit activity onto your GitHub graph
 
 Usage:
-  gb init      set up emails, source repos, secret, and the mirror repo
-  gb plan      preview what would be mirrored (writes nothing)
-  gb sync      mirror new activity and push
-  gb backfill  alias for sync; use --since to limit history
-  gb doctor    check every precondition for squares to appear
-  gb secret    print the recovery phrase for other machines
-  gb version
+  gbridge init      set up emails, source repos, secret, and the mirror repo
+  gbridge plan      preview what would be mirrored (writes nothing)
+  gbridge sync      mirror new activity and push
+  gbridge backfill  alias for sync; use --since to limit history
+  gbridge doctor    check every precondition for squares to appear
+  gbridge secret    print the recovery phrase for other machines
+  gbridge version
 
-Run gb <command> -h for flags. Config lives in $GB_HOME or the user config dir.
+Run gbridge <command> -h for flags. Config lives in $GBRIDGE_HOME or the user config dir.
 `
 
 type list []string
@@ -82,7 +82,7 @@ func main() {
 	case "secret":
 		err = runSecret()
 	case "version", "--version":
-		fmt.Println("gb", buildVersion())
+		fmt.Println("gbridge", buildVersion())
 	case "help", "-h", "--help":
 		banner(os.Stdout)
 		fmt.Print(usage)
@@ -91,7 +91,7 @@ func main() {
 		os.Exit(2)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "gb:", err)
+		fmt.Fprintln(os.Stderr, "gbridge:", err)
 		os.Exit(1)
 	}
 }

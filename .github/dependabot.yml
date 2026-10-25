@@ -1,4 +1,4 @@
-# Weekly update PRs for gb's dependencies and the pinned workflow actions.
+# Weekly update PRs for gbridge's dependencies and the pinned workflow actions.
 # Dependabot does not read tools.mod; update dev tools with go get -tool -modfile tools.mod.
 version: 2
 updates:

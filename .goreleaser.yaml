@@ -3,11 +3,11 @@
 # https://goreleaser.com/customization/
 version: 2
 
-project_name: gb
+project_name: gbridge
 
 builds:
-  - main: ./cmd/gb
-    binary: gb
+  - main: ./cmd/gbridge
+    binary: gbridge
     env:
       - CGO_ENABLED=0 # static binaries: no libc version to match on the user's machine
     goos: [linux, darwin, windows]
@@ -30,7 +30,7 @@ archives:
 checksum:
   name_template: checksums.txt
 
-# One SPDX SBOM per archive, made by syft: every module compiled into gb, with
+# One SPDX SBOM per archive, made by syft: every module compiled into gbridge, with
 # versions. Listed in checksums.txt, so the provenance attestation covers them.
 sboms:
   - artifacts: archive
@@ -62,11 +62,11 @@ release:
     Download the archive for your platform below, or with Go 1.27+:
 
     ```sh
-    go install github.com/sorfeb/greenbridge/cmd/gb@{{.Tag}}
+    go install github.com/sorfeb/greenbridge/cmd/gbridge@{{.Tag}}
     ```
 
     Verify a download was built by this repo's release workflow:
 
     ```sh
-    gh attestation verify gb_{{.Version}}_linux_amd64.tar.gz --repo sorfeb/greenbridge
+    gh attestation verify gbridge_{{.Version}}_linux_amd64.tar.gz --repo sorfeb/greenbridge
     ```
