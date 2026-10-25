@@ -1,4 +1,4 @@
-// Package brand draws the gb banner: a famous bridge in square pixels,
+// Package brand draws the gbridge banner: a famous bridge in square pixels,
 // coloured like a busy contribution graph. The bridge and its greens change
 // once a day and are the same for every run and every user on that day.
 package brand

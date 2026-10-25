@@ -4,7 +4,7 @@
 
 ## Evidence
 
-<!-- Before and after. For CLI changes, paste terminal output (gb plan, gb help). -->
+<!-- Before and after. For CLI changes, paste terminal output (gbridge plan, gbridge help). -->
 
 **Before:**
 

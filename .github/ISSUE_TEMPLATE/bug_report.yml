@@ -1,5 +1,5 @@
 name: Bug report
-description: gb did something wrong or missed commits it should mirror
+description: gbridge did something wrong or missed commits it should mirror
 labels: [bug]
 body:
   - type: textarea
@@ -12,16 +12,16 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: gb doctor output
-      description: Run `gb doctor` and paste the output. Remove anything private first.
+      label: gbridge doctor output
+      description: Run `gbridge doctor` and paste the output. Remove anything private first.
       render: text
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: gb version
-      placeholder: gb 0.1.0
+      label: gbridge version
+      placeholder: gbridge 0.1.0
     validations:
       required: true
   - type: dropdown

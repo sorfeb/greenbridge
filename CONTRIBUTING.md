@@ -4,8 +4,8 @@ Thanks for helping. Bug reports, fixes, and new bridges are all welcome.
 
 ## Before you start
 
-- **Bugs:** open an [issue](https://github.com/sorfeb/greenbridge/issues/new/choose) with `gb doctor` output.
-- **Features:** open an issue first. Anything that changes what a mirror commit carries needs agreement before code, because privacy is the point of `gb`.
+- **Bugs:** open an [issue](https://github.com/sorfeb/greenbridge/issues/new/choose) with `gbridge doctor` output.
+- **Features:** open an issue first. Anything that changes what a mirror commit carries needs agreement before code, because privacy is the point of `gbridge`.
 - **Security issues:** follow [SECURITY.md](SECURITY.md), not the issue tracker.
 
 ## Set up
