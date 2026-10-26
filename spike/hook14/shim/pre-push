@@ -1,0 +1,23 @@
+#!/bin/sh
+# gbridge pre-push shim for Git < 2.54. A global core.hooksPath points at
+# this directory, which hides every repo's .git/hooks, so the shim runs
+# gbridge on a copy of stdin and then hands the push to the repo's own hook.
+# gbridge's result never reaches Git; the repo hook's exit code does.
+# GBRIDGE_HOOK is the hook command, e.g. "gbridge hook".
+t=$(mktemp "${TMPDIR:-/tmp}/gbridge-pre-push.XXXXXX") || t=
+if [ -n "$t" ]; then
+	cat >"$t"
+	${GBRIDGE_HOOK:-gbridge hook} "$@" <"$t" >/dev/null 2>&1 || :
+fi
+h="$(git rev-parse --git-common-dir)/hooks/pre-push"
+if [ -x "$h" ]; then
+	if [ -n "$t" ]; then
+		"$h" "$@" <"$t"
+		c=$?
+		rm -f "$t"
+		exit $c
+	fi
+	exec "$h" "$@"
+fi
+[ -n "$t" ] && rm -f "$t"
+exit 0
