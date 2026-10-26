@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -43,8 +44,13 @@ func Doctor(w io.Writer) int {
 		r.ok(v)
 	}
 
+	// Load's missing-file errors end in the init hint; the fix line carries it.
 	cfg, err := config.Load()
-	if err != nil {
+	if errors.Is(err, config.ErrNoConfig) {
+		p, _ := config.Path()
+		r.fail("no config at "+p, "run gbridge init")
+		return r.fails
+	} else if err != nil {
 		r.fail(err.Error(), "run gbridge init")
 		return r.fails
 	}
@@ -52,7 +58,11 @@ func Doctor(w io.Writer) int {
 
 	sp, _ := config.SecretPath()
 	if _, err := ident.Load(sp); err != nil {
-		r.fail(err.Error(), "run gbridge init, or gbridge init --secret <phrase> to reuse another machine's secret")
+		msg := err.Error()
+		if errors.Is(err, ident.ErrNoSecret) {
+			msg = "no secret at " + sp
+		}
+		r.fail(msg, "run gbridge init, or gbridge init --secret <phrase> to reuse another machine's secret")
 	} else {
 		r.ok("secret present (same recovery phrase on every machine, or work double counts)")
 	}
