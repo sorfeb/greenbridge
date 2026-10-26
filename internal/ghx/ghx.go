@@ -1,52 +1,60 @@
-// Package ghx calls the GitHub CLI. greenbridge reuses the user's gh login
-// instead of managing tokens.
+// Package ghx is greenbridge's view of GitHub: the account, its emails, and
+// the mirror repo. CLI reaches GitHub through the user's gh login instead of
+// managing tokens; Fake stands in for it in tests.
 package ghx
 
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 )
 
-// User is the authenticated GitHub account.
-type User struct {
-	Login string `json:"login"`
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
+// ErrNotInstalled means the gh binary is not on PATH.
+var ErrNotInstalled = errors.New("gh not found")
+
+// GitHub is everything greenbridge asks of GitHub, in normalized form.
+type GitHub interface {
+	Account() (Account, error)
+	Emails() ([]Email, error)
+	Repo(fullName string) (Repo, error)
+	CreateRepo(name string, private bool) error
 }
 
-// NoreplyEmail is the address GitHub always attributes to this account.
-func (u User) NoreplyEmail() string {
-	return fmt.Sprintf("%d+%s@users.noreply.github.com", u.ID, u.Login)
-}
-
-// Repo is the subset of repo metadata doctor checks.
-type Repo struct {
-	Owner struct {
-		Login string `json:"login"`
-	} `json:"owner"`
-	IsFork           bool   `json:"isFork"`
-	Visibility       string `json:"visibility"`
-	DefaultBranchRef struct {
-		Name string `json:"name"`
-	} `json:"defaultBranchRef"`
+// Account is the authenticated GitHub account.
+type Account struct {
+	Login        string
+	NoreplyEmail string // the address GitHub always attributes to this account
 }
 
 // Email is one address on the account.
 type Email struct {
-	Email    string `json:"email"`
-	Verified bool   `json:"verified"`
+	Address  string
+	Verified bool
 }
 
-// Available reports whether gh is installed.
-func Available() bool {
-	_, err := exec.LookPath("gh")
-	return err == nil
+// Repo is what doctor needs to know about the mirror repo.
+type Repo struct {
+	Owner         string
+	Fork          bool
+	Private       bool // anything not public, so internal counts as private
+	DefaultBranch string
 }
 
-func run(args ...string) ([]byte, error) {
+// CLI is the GitHub CLI adapter.
+type CLI struct {
+	run func(args ...string) ([]byte, error)
+}
+
+// NewCLI returns an adapter that runs the gh on PATH.
+func NewCLI() *CLI { return &CLI{run: runGH} }
+
+func runGH(args ...string) ([]byte, error) {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return nil, ErrNotInstalled
+	}
 	cmd := exec.Command("gh", args...)
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
@@ -57,45 +65,78 @@ func run(args ...string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// CurrentUser returns the logged-in account.
-func CurrentUser() (User, error) {
-	var u User
-	b, err := run("api", "user")
+// Account returns the logged-in account.
+func (c *CLI) Account() (Account, error) {
+	b, err := c.run("api", "user")
 	if err != nil {
-		return u, err
+		return Account{}, err
 	}
-	err = json.Unmarshal(b, &u)
-	return u, err
+	var u struct {
+		Login string `json:"login"`
+		ID    int64  `json:"id"`
+	}
+	if err := json.Unmarshal(b, &u); err != nil {
+		return Account{}, fmt.Errorf("gh api user: %w", err)
+	}
+	if u.Login == "" || u.ID == 0 {
+		return Account{}, errors.New("gh api user: no login or id in response")
+	}
+	return Account{Login: u.Login, NoreplyEmail: fmt.Sprintf("%d+%s@users.noreply.github.com", u.ID, u.Login)}, nil
 }
 
-// Emails lists account emails. Needs the user:email scope.
-func Emails() ([]Email, error) {
-	var es []Email
-	b, err := run("api", "user/emails")
+// Emails lists account emails. Needs the user scope.
+func (c *CLI) Emails() ([]Email, error) {
+	b, err := c.run("api", "user/emails")
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(b, &es)
-	return es, err
-}
-
-// ViewRepo returns metadata for owner/name.
-func ViewRepo(repo string) (Repo, error) {
-	var r Repo
-	b, err := run("repo", "view", repo, "--json", "owner,isFork,visibility,defaultBranchRef")
-	if err != nil {
-		return r, err
+	var raw []struct {
+		Email    string `json:"email"`
+		Verified bool   `json:"verified"`
 	}
-	err = json.Unmarshal(b, &r)
-	return r, err
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return nil, fmt.Errorf("gh api user/emails: %w", err)
+	}
+	es := make([]Email, len(raw))
+	for i, e := range raw {
+		es[i] = Email{Address: e.Email, Verified: e.Verified}
+	}
+	return es, nil
 }
 
-// CreateRepo creates an empty repo owned by the current user.
-func CreateRepo(name string, private bool) error {
+// Repo returns facts about owner/name.
+func (c *CLI) Repo(fullName string) (Repo, error) {
+	b, err := c.run("repo", "view", fullName, "--json", "owner,isFork,visibility,defaultBranchRef")
+	if err != nil {
+		return Repo{}, err
+	}
+	var raw struct {
+		Owner struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+		IsFork           bool   `json:"isFork"`
+		Visibility       string `json:"visibility"`
+		DefaultBranchRef struct {
+			Name string `json:"name"`
+		} `json:"defaultBranchRef"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return Repo{}, fmt.Errorf("gh repo view %s: %w", fullName, err)
+	}
+	return Repo{
+		Owner:         raw.Owner.Login,
+		Fork:          raw.IsFork,
+		Private:       !strings.EqualFold(raw.Visibility, "public"),
+		DefaultBranch: raw.DefaultBranchRef.Name,
+	}, nil
+}
+
+// CreateRepo creates an empty repo owned by the current account.
+func (c *CLI) CreateRepo(name string, private bool) error {
 	vis := "--private"
 	if !private {
 		vis = "--public"
 	}
-	_, err := run("repo", "create", name, vis, "--description", "Activity mirror generated by greenbridge. Empty commits, no code.")
+	_, err := c.run("repo", "create", name, vis, "--description", "Activity mirror generated by greenbridge. Empty commits, no code.")
 	return err
 }

@@ -45,7 +45,7 @@ What stays: code, diffs, file names, commit messages, repo and branch names,
 commit hashes, and your work email.`
 
 // Init creates the config and secret, and the mirror repo on GitHub.
-func Init(o InitOptions, in io.Reader, out io.Writer) error {
+func Init(o InitOptions, gh ghx.GitHub, in io.Reader, out io.Writer) error {
 	rd := bufio.NewReader(in)
 	ask := func(q, def string) string {
 		if o.Yes {
@@ -172,18 +172,13 @@ func Init(o InitOptions, in io.Reader, out io.Writer) error {
 
 	// Author and mirror.
 	cfg.Author = config.Author{Name: o.AuthorName, Email: o.AuthorEmail}
-	var user ghx.User
-	haveGH := false
-	if ghx.Available() {
-		if u, err := ghx.CurrentUser(); err == nil {
-			user, haveGH = u, true
-		}
-	}
+	user, ghErr := gh.Account()
+	haveGH := ghErr == nil
 	if cfg.Author.Email == "" {
 		if !haveGH {
 			return errors.New("gh is not logged in: run gh auth login, or pass --author-email")
 		}
-		cfg.Author.Email = user.NoreplyEmail()
+		cfg.Author.Email = user.NoreplyEmail
 	}
 	if cfg.Author.Name == "" {
 		cfg.Author.Name = user.Login
@@ -205,11 +200,11 @@ func Init(o InitOptions, in io.Reader, out io.Writer) error {
 		}
 		cfg.Mirror.Repo = user.Login + "/" + name
 		cfg.Mirror.Remote = "https://github.com/" + cfg.Mirror.Repo + ".git"
-		if _, err := ghx.ViewRepo(cfg.Mirror.Repo); err != nil {
+		if _, err := gh.Repo(cfg.Mirror.Repo); err != nil {
 			if !confirm(fmt.Sprintf("Create %s repo %s?", cfg.Mirror.Visibility, cfg.Mirror.Repo)) {
 				return errors.New("aborted")
 			}
-			if err := ghx.CreateRepo(name, !o.Public); err != nil {
+			if err := gh.CreateRepo(name, !o.Public); err != nil {
 				return err
 			}
 			fmt.Fprintf(out, "Created %s\n", cfg.Mirror.Repo)
@@ -228,7 +223,7 @@ func Init(o InitOptions, in io.Reader, out io.Writer) error {
 	}
 	p, _ := config.Path()
 	fmt.Fprintf(out, "\n%s\n\nSaved %s\n", leavesMachine, p)
-	if cfg.Mirror.Visibility == "private" && !o.LocalOnly {
+	if cfg.Mirror.Visibility == "private" && !cfg.Mirror.LocalOnly() {
 		fmt.Fprintf(out, "Private mirror: turn on private contributions at %s\n", PrivateContribSettings)
 	}
 	fmt.Fprintln(out, "Next: gbridge plan (preview), then gbridge sync.")
