@@ -1,0 +1,21 @@
+      7  $TMP/src
+      7  $TMP/clone
+  skip $TMP/hosted: has a github.com remote (GitHub already counts it)
+  skip $TMP/missing: not a readable git repo
+
+14 commits matched, 7 after dedup, 2024-12-30 to 2025-03-11
+already in mirror: 3, would add: 4
+
+year    commits  active days
+2024          1            1
+2025          6            4
+
+        A   M   J    J   A   S    O   N   D    J   F   M 
+Sun ·····················································
+    ··········································░·····▒····
+Tue ····················································░
+    ·····················································
+Thu ··········································░········· 
+    ··········································░········· 
+Sat ···················································· 
+    less ·░▒▓█ more
