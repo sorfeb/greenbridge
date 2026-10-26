@@ -195,6 +195,8 @@ func Assets() map[string][]byte {
 		"hero-dark.svg":      heroSVG(true),
 		"bridges-light.svg":  gallerySVG(false),
 		"bridges-dark.svg":   gallerySVG(true),
+		"proof-light.svg":    proofSVG(false),
+		"proof-dark.svg":     proofSVG(true),
 		"social-preview.png": socialPNG(),
 	}
 }
