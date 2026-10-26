@@ -90,11 +90,14 @@ func Decode(phrase string) ([]byte, error) {
 	return s, nil
 }
 
+// ErrNoSecret is wrapped by Load when the secret file does not exist.
+var ErrNoSecret = errors.New("run gbridge init")
+
 // Load reads a secret file.
 func Load(path string) ([]byte, error) {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("no secret at %s: run gbridge init", path)
+		return nil, fmt.Errorf("no secret at %s: %w", path, ErrNoSecret)
 	}
 	if err != nil {
 		return nil, err
