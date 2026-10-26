@@ -39,6 +39,9 @@ type Config struct {
 	NoticeAccepted     bool     `json:"notice_accepted"`
 }
 
+// ErrNoConfig is wrapped by Load when the config file does not exist.
+var ErrNoConfig = errors.New("run gbridge init")
+
 // Dir is the greenbridge home: $GBRIDGE_HOME, else <user config dir>/greenbridge.
 func Dir() (string, error) {
 	if d := os.Getenv("GBRIDGE_HOME"); d != "" {
@@ -85,7 +88,7 @@ func Load() (*Config, error) {
 	}
 	b, err := os.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("no config at %s: run gbridge init", p)
+		return nil, fmt.Errorf("no config at %s: %w", p, ErrNoConfig)
 	}
 	if err != nil {
 		return nil, err
