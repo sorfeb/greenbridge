@@ -15,18 +15,32 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/sorfeb/greenbridge" alt="MIT license"></a>
 </p>
 
-Work on an employer GitLab, a self-hosted Forgejo, or an on-prem server never reaches your GitHub graph. `gbridge` reads commit metadata from your local clones and writes one empty, backdated commit per real commit to a private mirror repo you own. GitHub then counts those commits like any other.
+Work on an employer GitLab, Bitbucket, a self-hosted Gitea or Forgejo, or an on-prem server never reaches your GitHub contribution graph. `gbridge` reads commit metadata from your local clones and writes one empty, backdated commit per real commit to a private mirror repo you own. GitHub then counts those commits like any other, and the green squares appear.
+
+```sh
+go install github.com/sorfeb/greenbridge/cmd/gbridge@latest   # or download a release; see Install
+gbridge init --email you@work.com --scan ~/work               # creates a private mirror repo
+gbridge plan                                                  # preview, writes nothing; then gbridge sync
+```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/proof-dark.svg">
+  <img src=".github/assets/proof-light.svg" alt="A contribution graph before and after gbridge sync: sparse personal activity, then a busy weekday pattern with a two-week holiday left empty. Sample data." width="640">
+</picture>
 
 ## Table of contents
 
 - [Security](#security)
 - [Background](#background)
+- [Do you need this?](#do-you-need-this)
 - [Install](#install)
 - [Usage](#usage)
 - [The bridge of the day](#the-bridge-of-the-day)
 - [What counts](#what-counts)
 - [Keeping the graph current](#keeping-the-graph-current)
+- [Alternatives](#alternatives)
 - [Limitations](#limitations)
+- [FAQ](#faq)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -49,15 +63,27 @@ GitHub counts a commit when it is on the default branch of a non-fork repo and i
 
 Check your employment contract before mirroring employer work. Only timestamps leave your machine, but some employers treat even those as internal.
 
+## Do you need this?
+
+Maybe not. Skip `gbridge` when either of these is true:
+
+- **Your employer's code is in an organization on github.com.** GitHub already counts those commits. For private repos, turn on **Include private contributions on my profile** at <https://github.com/settings/profile> and make sure your work email is on your account.
+- **Your employer runs GitHub Enterprise Server with unified contributions.** An enterprise owner enables it through GitHub Connect, and each user links their accounts. GitHub then sends anonymized contribution counts to your github.com graph. Ask your administrator. See [Sharing contributions from GitHub Enterprise Server](https://docs.github.com/en/enterprise-server@latest/account-and-profile/how-tos/contribution-settings/sharing-contributions-from-github-enterprise-server).
+
+Use `gbridge` when your work is on GitLab, Bitbucket, Gitea, Forgejo, or any other host that gives you git clones, or on GitHub Enterprise Server without unified contributions.
+
 ## Install
 
 Requires `git` and the [GitHub CLI](https://cli.github.com) logged in (`gh auth login`).
 
-Download the archive for your platform from [Releases](https://github.com/sorfeb/greenbridge/releases) and put `gbridge` on your `PATH`. Or, with Go 1.27+:
+Pick one:
 
 ```sh
-go install github.com/sorfeb/greenbridge/cmd/gbridge@latest
+mise use -g github:sorfeb/greenbridge                          # mise, from the GitHub release
+go install github.com/sorfeb/greenbridge/cmd/gbridge@latest    # Go 1.27+
 ```
+
+Or download the archive for your platform from [Releases](https://github.com/sorfeb/greenbridge/releases) and put `gbridge` on your `PATH`.
 
 While this repo is private, set `GOPRIVATE=github.com/sorfeb/*` first, or run `go install ./cmd/gbridge` from a clone.
 
@@ -128,7 +154,7 @@ Release archives also include the four scripts under `completions/`.
 - It is reachable from any local branch, remote-tracking branch, or tag in a source clone.
 - Its repo has no github.com remote, since GitHub already counts those. Override at init with `--include-github`.
 
-Duplicates collapse: a rebased, cherry-picked, or amended commit keeps its author email and date, so it maps to the same ID and counts once.
+Duplicates collapse: a rebased, cherry-picked, or amended commit keeps its author email and date, so it maps to the same ID and counts once. Tested against all three in [issue #25](https://github.com/sorfeb/greenbridge/issues/25#issuecomment-6415125896). Two different commits by one email in the same second also collapse to one ID.
 
 ### How this differs from GitHub
 
@@ -149,11 +175,63 @@ There is no automatic trigger yet. Run `gbridge sync` after you push.
 
 A local sync costs about 0.5 s. Network round trips to GitHub (check the mirror, fetch, push) add 3-6 s. The planned pre-push hook will only queue a request and start a detached `gbridge sync`, so it adds milliseconds to your push and never blocks or fails it.
 
+## Alternatives
+
+Other tools solve the same problem. Pick by where your code lives and what you accept in the mirror. Facts come from each project's README, checked on 2026-10-26. For greens and carboncopy, the dedup column comes from running them against a rebased, cherry-picked, and amended history ([issue #25](https://github.com/sorfeb/greenbridge/issues/25#issuecomment-6415125896)). Open an issue if a row is out of date.
+
+| | Reads | Needs | Mirror receives | Survives rebase | Notes |
+|---|---|---|---|---|---|
+| `gbridge` | Local clones, any host | git; `gh` unless `--local-only` | Timestamp and an opaque ID | Yes (tested) | `plan` previews, `doctor` explains missing squares. Commits only |
+| [greens](https://github.com/yuvrajangadsingh/greens) | Local clones, any host | bash, git; optional `gh` | Timestamp; optional commit subjects; repo-name dashboard on a verified private mirror | Yes, by timestamp (tested) | Also mirrors PR and issue timestamps, opt in. Windows is beta |
+| [alexandear/import-gitlab-commits](https://github.com/alexandear/import-gitlab-commits) | GitLab API | Go or Docker; GitLab token with `read_api`, `read_user`, `read_repository` | Project ID and source commit hash in each message | Not tested | GitLab only. Ships before and after screenshots |
+| [Contributions Importer](https://github.com/miromannino/Contributions-Importer-For-Github) | Local repos, or a CSV of counts | Python (pip or brew) | Mock code files, mock or kept messages | Not tested | Its CSV mode creates commits from counts you supply. `gbridge` has no such mode |
+| [carboncopy](https://github.com/gcrevell/carboncopy) | Gitea API, default branch | bash, curl, jq; Gitea token | Timestamp; ledger of hashed repo and commit | No: a rewritten commit is copied again (tested) | Gitea only |
+
+`gbridge` is not the only tool that survives a rebase. What it adds is local-first credentials (no host token), a preview before anything is published, and no commit hash, message, or repo name in the mirror. It is younger than the others and mirrors fewer activity types.
+
 ## Limitations
 
 - **Clones only.** Commits that never reached a local clone are invisible. Run `git fetch --all` before syncing.
 - **Removal is manual.** Sync only adds. Removing mirrored commits means rebuilding the mirror and force-pushing it.
 - **One mirror per config.** Splitting activity per employer isn't supported yet.
+- **Commits only.** Pull requests, issues, and reviews are not mirrored.
+- **Same-second commits collapse.** Two commits by one email with the same author second count once.
+
+## FAQ
+
+### How do I show GitLab contributions on my GitHub profile?
+
+Run `gbridge init --email you@work.com --scan ~/work`, then `gbridge plan` and `gbridge sync`. `gbridge` reads your local GitLab clones and writes one empty, backdated commit per commit you authored to a private mirror repo on your account. Turn on private contributions in your profile settings so the squares show. See [Install](#install) and [Usage](#usage).
+
+### How do I show private work commits on my GitHub contribution graph?
+
+If the work is on github.com, you don't need `gbridge`: turn on **Include private contributions on my profile**. If it is on another host, mirror it with `gbridge`, then turn on the same setting. `gbridge doctor` reports that setting as unverified, since no GitHub API exposes it.
+
+### Can I show Bitbucket, Gitea, or Forgejo commits on GitHub?
+
+Yes. `gbridge` reads local git clones, so the host doesn't matter. Forgejo and Gitea heatmaps count more than commits, so their totals sit above GitHub's. See [Why your forge shows more](#why-your-forge-shows-more).
+
+### Why aren't my commits showing as green squares?
+
+Run `gbridge doctor`. GitHub counts a commit only when all of these hold:
+
+- It is on the default branch of a repo that is not a fork.
+- Its author email is verified on your account.
+- For a private repo, **Include private contributions on my profile** is on.
+
+The graph can take up to 24 hours to update after a push.
+
+### Does it copy my code or commit messages?
+
+No. Per commit, only a timestamp and an opaque 12-character ID leave your machine. See [Security](#security).
+
+### Is mirroring work commits allowed by GitHub?
+
+`gbridge` mirrors commits you wrote, one to one, at the time you wrote them. It never fills gaps or pads streaks, which is what GitHub's [acceptable use policy](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github) targets. Check your employment contract first; see [Background](#background).
+
+### What happens when I rebase, cherry-pick, or squash?
+
+Rebase, cherry-pick, and amend keep the author date, so the commit keeps its ID and counts once. A squash merge creates a new commit with its own author date. `gbridge` mirrors it alongside the branch commits it replaced for as long as your clone still has them.
 
 ## Contributing
 
