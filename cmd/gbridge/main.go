@@ -196,42 +196,11 @@ func runPlan(args []string) error {
 	if err != nil {
 		return err
 	}
-	d, err := app.Collect(cfg, secret, t)
+	p, err := app.ComputePlan(cfg, secret, app.PlanOptions{Since: t, Offline: f.offline})
 	if err != nil {
 		return err
 	}
-	for _, r := range d.Repos {
-		if r.Skipped != "" {
-			fmt.Printf("  skip %s: %s\n", r.Path, r.Skipped)
-		} else {
-			fmt.Printf("  %5d  %s\n", r.Matched, r.Path)
-		}
-	}
-	fmt.Printf("\n%d commits matched, %d after dedup", d.Matched, len(d.Entries))
-	if len(d.Entries) > 0 {
-		fmt.Printf(", %s to %s", app.DayKey(d.Entries[0].Time), app.DayKey(d.Entries[len(d.Entries)-1].Time))
-	}
-	fmt.Println()
-
-	m := app.MirrorOf(cfg)
-	if f.offline {
-		m.Remote = ""
-	}
-	if err := m.Ensure(); err != nil {
-		return err
-	}
-	tip, err := m.Fetch()
-	if err != nil {
-		fmt.Printf("mirror fetch failed (%v); showing all as new\n", err)
-	}
-	ledger, err := m.Ledger(tip)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("already in mirror: %d, would add: %d\n\n", len(ledger), len(app.Diff(d.Entries, ledger)))
-	app.YearTable(os.Stdout, d.Entries)
-	fmt.Println()
-	app.Graph(os.Stdout, d.Entries, f.weeks, time.Now(), brand.Paint(lipgloss.NewRenderer(os.Stdout)))
+	p.Report(os.Stdout, time.Now(), f.weeks, brand.Paint(lipgloss.NewRenderer(os.Stdout)))
 	return nil
 }
 
