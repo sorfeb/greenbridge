@@ -17,6 +17,7 @@ import (
 	"github.com/sorfeb/greenbridge/internal/app"
 	"github.com/sorfeb/greenbridge/internal/brand"
 	"github.com/sorfeb/greenbridge/internal/config"
+	"github.com/sorfeb/greenbridge/internal/ghx"
 	"github.com/sorfeb/greenbridge/internal/ident"
 )
 
@@ -94,7 +95,7 @@ func main() {
 	case "sync", "backfill":
 		err = runSync(cmd, args)
 	case "doctor":
-		if app.Doctor(os.Stdout) > 0 {
+		if app.Doctor(os.Stdout, ghx.NewCLI()) > 0 {
 			os.Exit(1)
 		}
 	case "secret":
@@ -144,7 +145,7 @@ func runInit(args []string) error {
 	_ = f.set().Parse(args)
 	f.o.Emails, f.o.Repos, f.o.Scan = f.emails, f.repos.list, f.scan.list
 	banner(os.Stdout)
-	return app.Init(f.o, os.Stdin, os.Stdout)
+	return app.Init(f.o, ghx.NewCLI(), os.Stdin, os.Stdout)
 }
 
 func load() (*config.Config, []byte, error) {

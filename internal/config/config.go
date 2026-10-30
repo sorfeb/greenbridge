@@ -20,6 +20,10 @@ type Mirror struct {
 	Visibility string `json:"visibility"` // private or public
 }
 
+// LocalOnly reports whether the mirror is never pushed. Sync keys on the same
+// field: no remote, no push.
+func (m Mirror) LocalOnly() bool { return m.Remote == "" }
+
 // Author is the identity written on mirror commits.
 type Author struct {
 	Name  string `json:"name"`
