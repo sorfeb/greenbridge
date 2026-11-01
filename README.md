@@ -47,7 +47,6 @@ gbridge plan                                                  # preview, writes 
 - [Do you need this?](#do-you-need-this)
 - [Install](#install)
 - [Usage](#usage)
-- [The bridge of the day](#the-bridge-of-the-day)
 - [What counts](#what-counts)
 - [Keeping the graph current](#keeping-the-graph-current)
 - [Alternatives](#alternatives)
@@ -149,15 +148,6 @@ Completes commands, each command's flags, and directories after `--repo` and `--
 
 Release archives also include the four scripts under `completions/`.
 
-## The bridge of the day
-
-`gbridge help`, `gbridge init`, and a bare `gbridge` open with a famous bridge in contribution-graph squares. The bridge and its greens change once a day and match for everyone on that day. Pipes and scripts get plain text.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/bridges-dark.svg">
-  <img src=".github/assets/bridges-light.svg" alt="The ten bridges gbridge rotates through: Golden Gate, Brooklyn, Tower Bridge, Sydney Harbour, Pont du Gard, Ponte Vecchio, Rialto, Forth Bridge, Millau Viaduct, and Charles Bridge" width="528">
-</picture>
-
 ## What counts
 
 `gbridge` mirrors a commit when all of these hold:
@@ -176,10 +166,6 @@ Duplicates collapse: a rebased, cherry-picked, or amended commit keeps its autho
 | Merge commits | Counted | Counted |
 | Date used | Author date, commit's own time zone | Same |
 | Pull requests, issues, reviews | One contribution each | Not mirrored; git history doesn't record them |
-
-### Why your forge shows more
-
-Forgejo and Gitea heatmaps count feed actions, not commits: every push, opened or merged pull request, comment, and branch change adds one. `gbridge` sees only commits, so its day totals match your git history and sit below the forge's heatmap. That gap is expected.
 
 ## Keeping the graph current
 
@@ -221,7 +207,7 @@ If the work is on github.com, you don't need `gbridge`: turn on **Include privat
 
 ### Can I show Bitbucket, Gitea, or Forgejo commits on GitHub?
 
-Yes. `gbridge` reads local git clones, so the host doesn't matter. Forgejo and Gitea heatmaps count more than commits, so their totals sit above GitHub's. See [Why your forge shows more](#why-your-forge-shows-more).
+Yes. `gbridge` reads local git clones, so the host doesn't matter.
 
 ### Why aren't my commits showing as green squares?
 
