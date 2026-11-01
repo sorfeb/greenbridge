@@ -17,6 +17,18 @@
 
 Work on an employer GitLab, Bitbucket, a self-hosted Gitea or Forgejo, or an on-prem server never reaches your GitHub contribution graph. `gbridge` reads commit metadata from your local clones and writes one empty, backdated commit per real commit to a private mirror repo you own. GitHub then counts those commits like any other, and the green squares appear.
 
+<!-- Preview for review: keep pipe or bridge, drop the other. -->
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-pipe-dark.gif">
+  <img src=".github/assets/how-pipe-light.gif" alt="Commit squares from a jar of work clones flow through a pipe and valve into a GitHub contribution graph" width="640">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-bridge-dark.gif">
+  <img src=".github/assets/how-bridge-light.gif" alt="Commit squares cross a suspension bridge from a private forge to a GitHub contribution graph" width="640">
+</picture>
+
 ```sh
 go install github.com/sorfeb/greenbridge/cmd/gbridge@latest   # or download a release; see Install
 gbridge init --email you@work.com --scan ~/work               # creates a private mirror repo
