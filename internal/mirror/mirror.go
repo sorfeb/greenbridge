@@ -75,6 +75,15 @@ func (m Mirror) Fetch() (string, error) {
 	return m.rev(tracking), nil
 }
 
+// Last returns the tip from the most recent successful Fetch without
+// contacting origin. An empty string means none is known.
+func (m Mirror) Last() string {
+	if m.Remote == "" {
+		return m.rev("refs/heads/" + m.Branch)
+	}
+	return m.rev("refs/remotes/origin/" + m.Branch)
+}
+
 // Ledger returns the IDs already present at tip.
 func (m Mirror) Ledger(tip string) (map[string]bool, error) {
 	ids := map[string]bool{}

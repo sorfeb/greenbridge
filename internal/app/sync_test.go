@@ -1,67 +1,28 @@
 package app
 
 import (
-	"bytes"
 	"io"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sorfeb/greenbridge/internal/config"
-	"github.com/sorfeb/greenbridge/internal/gitx"
+	"github.com/sorfeb/greenbridge/internal/gittest"
 	"github.com/sorfeb/greenbridge/internal/ident"
 )
 
-func git(t *testing.T, dir string, env []string, args ...string) string {
-	t.Helper()
-	out, err := gitx.Run(dir, env, nil, args...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return out
-}
-
-func commit(t *testing.T, repo, email, date string) {
-	t.Helper()
-	env := []string{
-		"GIT_AUTHOR_NAME=w", "GIT_AUTHOR_EMAIL=" + email, "GIT_AUTHOR_DATE=" + date,
-		"GIT_COMMITTER_NAME=w", "GIT_COMMITTER_EMAIL=" + email, "GIT_COMMITTER_DATE=" + date,
-	}
-	git(t, repo, env, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "secret work message")
-}
-
 func TestSyncEndToEnd(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not installed")
-	}
+	gittest.Need(t)
 	tmp := t.TempDir()
-	src := filepath.Join(tmp, "src")
-	remote := filepath.Join(tmp, "remote.git")
-	git(t, "", nil, "init", "-q", "-b", "main", src)
-	git(t, "", nil, "init", "-q", "--bare", "-b", "main", remote)
+	cfg := mirrored(t, tmp)
+	src, remote := cfg.Repos[0], cfg.Mirror.Remote
+	secret := testSecret
 
-	commit(t, src, "me@work.com", "2025-01-02T23:30:00+07:00")
-	commit(t, src, "Me@Work.com", "2025-01-03T10:00:00+07:00")
-	commit(t, src, "someone@else.com", "2025-01-03T11:00:00+07:00")
-	commit(t, src, "alt@work.local", "2025-01-04T09:00:00-05:00")
-
-	cfg := &config.Config{
-		Version: 1,
-		Emails:  []string{"me@work.com", "alt@work.local"},
-		Repos:   []string{src},
-		Mirror: config.Mirror{
-			Remote: remote, Path: filepath.Join(tmp, "mirror.git"), Branch: "main", Visibility: "private",
-		},
-		Author:     config.Author{Name: "me", Email: "1+me@users.noreply.github.com"},
-		TimePolicy: ident.PolicyExact,
-		Identity:   ident.ModeAuthorDate,
-	}
-	if err := cfg.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	secret := bytes.Repeat([]byte{7}, ident.SecretSize)
+	gittest.Commit(t, src, "me@work.com", "2025-01-02T23:30:00+07:00")
+	gittest.Commit(t, src, "Me@Work.com", "2025-01-03T10:00:00+07:00")
+	gittest.Commit(t, src, "someone@else.com", "2025-01-03T11:00:00+07:00")
+	gittest.Commit(t, src, "alt@work.local", "2025-01-04T09:00:00-05:00")
 
 	res, err := Sync(cfg, secret, SyncOptions{}, io.Discard)
 	if err != nil {
@@ -71,7 +32,7 @@ func TestSyncEndToEnd(t *testing.T) {
 		t.Fatalf("first sync: %+v, want 3 added and pushed", res)
 	}
 
-	log := git(t, remote, nil, "log", "--format=%s|%ae|%aI|%cI", "main")
+	log := gittest.Git(t, remote, nil, "log", "--format=%s|%ae|%aI|%cI", "main")
 	lines := strings.Split(log, "\n")
 	if len(lines) != 3 {
 		t.Fatalf("remote has %d commits, want 3:\n%s", len(lines), log)
@@ -81,14 +42,14 @@ func TestSyncEndToEnd(t *testing.T) {
 		if !strings.HasPrefix(f[0], "gb/1 ") || f[1] != cfg.Author.Email || f[2] != f[3] {
 			t.Errorf("bad mirror commit %q", l)
 		}
-		if strings.Contains(l, "secret work message") || strings.Contains(l, "work.com") {
+		if strings.Contains(l, gittest.Message) || strings.Contains(l, "work.com") {
 			t.Errorf("mirror leaked source data: %q", l)
 		}
 	}
 	if !strings.Contains(log, "2025-01-02T23:30:00+07:00") || !strings.Contains(log, "2025-01-04T09:00:00-05:00") {
 		t.Errorf("original offsets not preserved:\n%s", log)
 	}
-	if tree := git(t, remote, nil, "rev-parse", "main^{tree}"); tree != "4b825dc642cb6eb9a060e54bf8d69288fbee4904" {
+	if tree := gittest.Git(t, remote, nil, "rev-parse", "main^{tree}"); tree != "4b825dc642cb6eb9a060e54bf8d69288fbee4904" {
 		t.Errorf("mirror tree not empty: %s", tree)
 	}
 
@@ -98,7 +59,7 @@ func TestSyncEndToEnd(t *testing.T) {
 	}
 
 	// A rebase rewrites hashes but keeps author dates: still nothing new.
-	git(t, src, nil, "-c", "commit.gpgsign=false", "-c", "user.name=w", "-c", "user.email=me@work.com",
+	gittest.Git(t, src, nil, "-c", "commit.gpgsign=false", "-c", "user.name=w", "-c", "user.email=me@work.com",
 		"rebase", "-q", "--force-rebase", "--root", "--committer-date-is-author-date")
 	if res, err = Sync(cfg, secret, SyncOptions{}, io.Discard); err != nil || res.Added != 0 {
 		t.Fatalf("after rebase: %+v %v, want 0 added", res, err)
@@ -108,41 +69,39 @@ func TestSyncEndToEnd(t *testing.T) {
 	// must build on the remote tip rather than fail or duplicate.
 	other := *cfg
 	other.Mirror.Path = filepath.Join(tmp, "mirror2.git")
-	commit(t, src, "me@work.com", "2025-02-01T12:00:00+07:00")
+	gittest.Commit(t, src, "me@work.com", "2025-02-01T12:00:00+07:00")
 	if res, err = Sync(&other, secret, SyncOptions{}, io.Discard); err != nil || res.Added != 1 {
 		t.Fatalf("second machine: %+v %v, want 1 added", res, err)
 	}
-	commit(t, src, "me@work.com", "2025-02-02T12:00:00+07:00")
+	gittest.Commit(t, src, "me@work.com", "2025-02-02T12:00:00+07:00")
 	if res, err = Sync(cfg, secret, SyncOptions{}, io.Discard); err != nil || res.Added != 1 || !res.Pushed {
 		t.Fatalf("first machine after race: %+v %v, want 1 added", res, err)
 	}
-	if n := git(t, remote, nil, "rev-list", "--count", "main"); n != "5" {
+	if n := gittest.Git(t, remote, nil, "rev-list", "--count", "main"); n != "5" {
 		t.Fatalf("remote has %s commits, want 5", n)
 	}
 
 	// Dry run writes nothing.
-	commit(t, src, "me@work.com", "2025-03-01T12:00:00+07:00")
+	gittest.Commit(t, src, "me@work.com", "2025-03-01T12:00:00+07:00")
 	if res, err = Sync(cfg, secret, SyncOptions{DryRun: true}, io.Discard); err != nil || res.Added != 1 || res.Pushed {
 		t.Fatalf("dry run: %+v %v", res, err)
 	}
-	if n := git(t, remote, nil, "rev-list", "--count", "main"); n != "5" {
+	if n := gittest.Git(t, remote, nil, "rev-list", "--count", "main"); n != "5" {
 		t.Fatalf("dry run pushed: %s commits", n)
 	}
 }
 
 func TestDateOnlyPolicy(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not installed")
-	}
+	gittest.Need(t)
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "src")
-	git(t, "", nil, "init", "-q", "-b", "main", src)
-	commit(t, src, "me@work.com", "2025-01-02T23:30:00+07:00")
+	gittest.Init(t, src)
+	gittest.Commit(t, src, "me@work.com", "2025-01-02T23:30:00+07:00")
 	cfg := &config.Config{
 		Emails: []string{"me@work.com"}, Repos: []string{src},
 		TimePolicy: ident.PolicyDateOnly, Identity: ident.ModeAuthorDate,
 	}
-	d, err := Collect(cfg, bytes.Repeat([]byte{7}, ident.SecretSize), time.Time{})
+	d, err := Collect(cfg, testSecret, time.Time{})
 	if err != nil || len(d.Entries) != 1 {
 		t.Fatalf("collect: %v %v", d, err)
 	}
