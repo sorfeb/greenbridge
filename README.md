@@ -40,6 +40,19 @@ gbridge plan                                                  # preview, writes 
   <img src=".github/assets/proof-light.svg" alt="A contribution graph before and after gbridge sync: sparse personal activity, then a busy weekday pattern with a two-week holiday left empty. Sample data." width="640">
 </picture>
 
+### Real account, real numbers
+
+The maintainer's own graph, last 12 months to 2026-11-02. `gbridge` mirrored 2,292 commits from non-GitHub forges, from 2026-09-09 on.
+
+| | Before | After `gbridge sync` |
+|---|---|---|
+| Contributions, 12 months | 6,994 | 9,268 (+33%) |
+| Contributions, last 9 weeks | 1,799 | 4,073 (2.3x) |
+| Active days, last 9 weeks | 57 of 63 | 63 of 63 |
+| Longest streak | 82 days | 95 days |
+
+Every added square is a commit the maintainer wrote, on the day they wrote it.
+
 ## Table of contents
 
 - [Security](#security)
