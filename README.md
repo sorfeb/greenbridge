@@ -17,6 +17,18 @@
 
 Work on an employer GitLab, Bitbucket, a self-hosted Gitea or Forgejo, or an on-prem server never reaches your GitHub contribution graph. `gbridge` reads commit metadata from your local clones and writes one empty, backdated commit per real commit to a private mirror repo you own. GitHub then counts those commits like any other, and the green squares appear.
 
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-gitlab-dark.svg"><img src=".github/assets/forge-gitlab-light.svg" alt="GitLab" title="GitLab" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-bitbucket-dark.svg"><img src=".github/assets/forge-bitbucket-light.svg" alt="Bitbucket" title="Bitbucket" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-gitea-dark.svg"><img src=".github/assets/forge-gitea-light.svg" alt="Gitea" title="Gitea" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-forgejo-dark.svg"><img src=".github/assets/forge-forgejo-light.svg" alt="Forgejo" title="Forgejo" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-codeberg-dark.svg"><img src=".github/assets/forge-codeberg-light.svg" alt="Codeberg" title="Codeberg" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-git-dark.svg"><img src=".github/assets/forge-git-light.svg" alt="Any git server" title="Any git server" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-self-hosted-dark.svg"><img src=".github/assets/forge-self-hosted-light.svg" alt="Self-hosted" title="Self-hosted" width="48"></picture>
+</p>
+
+<p align="center">Works with GitLab, Bitbucket, Gitea, Forgejo, Codeberg, and any server you can <code>git clone</code> from.</p>
+
 <!-- Preview for review: keep pipe or bridge, drop the other. -->
 
 <picture>
