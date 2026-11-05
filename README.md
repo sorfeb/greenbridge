@@ -17,6 +17,18 @@
 
 Work on an employer GitLab, Bitbucket, a self-hosted Gitea or Forgejo, or an on-prem server never reaches your GitHub contribution graph. `gbridge` reads commit metadata from your local clones and writes one empty, backdated commit per real commit to a private mirror repo you own. GitHub then counts those commits like any other, and the green squares appear.
 
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-gitlab-dark.svg"><img src=".github/assets/forge-gitlab-light.svg" alt="GitLab" title="GitLab" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-bitbucket-dark.svg"><img src=".github/assets/forge-bitbucket-light.svg" alt="Bitbucket" title="Bitbucket" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-gitea-dark.svg"><img src=".github/assets/forge-gitea-light.svg" alt="Gitea" title="Gitea" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-forgejo-dark.svg"><img src=".github/assets/forge-forgejo-light.svg" alt="Forgejo" title="Forgejo" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-codeberg-dark.svg"><img src=".github/assets/forge-codeberg-light.svg" alt="Codeberg" title="Codeberg" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-git-dark.svg"><img src=".github/assets/forge-git-light.svg" alt="Any git server" title="Any git server" width="48"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-self-hosted-dark.svg"><img src=".github/assets/forge-self-hosted-light.svg" alt="Self-hosted" title="Self-hosted" width="48"></picture>
+</p>
+
+<p align="center">Works with GitLab, Bitbucket, Gitea, Forgejo, Codeberg, and any server you can <code>git clone</code> from.</p>
+
 <!-- Preview for review: keep pipe or bridge, drop the other. -->
 
 <picture>
@@ -40,6 +52,19 @@ gbridge plan                                                  # preview, writes 
   <img src=".github/assets/proof-light.svg" alt="A contribution graph before and after gbridge sync: sparse personal activity, then a busy weekday pattern with a two-week holiday left empty. Sample data." width="640">
 </picture>
 
+### Real account, real numbers
+
+The maintainer's own graph, last 12 months to 2026-11-02. `gbridge` mirrored 2,292 commits from non-GitHub forges, from 2026-09-09 on.
+
+| | Before | After `gbridge sync` |
+|---|---|---|
+| Contributions, 12 months | 6,994 | 9,268 (+33%) |
+| Contributions, last 9 weeks | 1,799 | 4,073 (2.3x) |
+| Active days, last 9 weeks | 57 of 63 | 63 of 63 |
+| Longest streak | 82 days | 95 days |
+
+Every added square is a commit the maintainer wrote, on the day they wrote it.
+
 ## Table of contents
 
 - [Security](#security)
@@ -47,7 +72,6 @@ gbridge plan                                                  # preview, writes 
 - [Do you need this?](#do-you-need-this)
 - [Install](#install)
 - [Usage](#usage)
-- [The bridge of the day](#the-bridge-of-the-day)
 - [What counts](#what-counts)
 - [Keeping the graph current](#keeping-the-graph-current)
 - [Alternatives](#alternatives)
@@ -149,15 +173,6 @@ Completes commands, each command's flags, and directories after `--repo` and `--
 
 Release archives also include the four scripts under `completions/`.
 
-## The bridge of the day
-
-`gbridge help`, `gbridge init`, and a bare `gbridge` open with a famous bridge in contribution-graph squares. The bridge and its greens change once a day and match for everyone on that day. Pipes and scripts get plain text.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/bridges-dark.svg">
-  <img src=".github/assets/bridges-light.svg" alt="The ten bridges gbridge rotates through: Golden Gate, Brooklyn, Tower Bridge, Sydney Harbour, Pont du Gard, Ponte Vecchio, Rialto, Forth Bridge, Millau Viaduct, and Charles Bridge" width="528">
-</picture>
-
 ## What counts
 
 `gbridge` mirrors a commit when all of these hold:
@@ -176,10 +191,6 @@ Duplicates collapse: a rebased, cherry-picked, or amended commit keeps its autho
 | Merge commits | Counted | Counted |
 | Date used | Author date, commit's own time zone | Same |
 | Pull requests, issues, reviews | One contribution each | Not mirrored; git history doesn't record them |
-
-### Why your forge shows more
-
-Forgejo and Gitea heatmaps count feed actions, not commits: every push, opened or merged pull request, comment, and branch change adds one. `gbridge` sees only commits, so its day totals match your git history and sit below the forge's heatmap. That gap is expected.
 
 ## Keeping the graph current
 
@@ -221,7 +232,7 @@ If the work is on github.com, you don't need `gbridge`: turn on **Include privat
 
 ### Can I show Bitbucket, Gitea, or Forgejo commits on GitHub?
 
-Yes. `gbridge` reads local git clones, so the host doesn't matter. Forgejo and Gitea heatmaps count more than commits, so their totals sit above GitHub's. See [Why your forge shows more](#why-your-forge-shows-more).
+Yes. `gbridge` reads local git clones, so the host doesn't matter.
 
 ### Why aren't my commits showing as green squares?
 
