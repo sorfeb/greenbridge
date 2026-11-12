@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/sorfeb/greenbridge/internal/ident"
 )
@@ -123,6 +125,8 @@ func (c *Config) Save() error {
 	return os.WriteFile(p, append(b, '\n'), 0o600)
 }
 
+var repoPattern = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
+
 // Validate checks required fields and enum values.
 func (c *Config) Validate() error {
 	switch {
@@ -130,8 +134,12 @@ func (c *Config) Validate() error {
 		return errors.New("config: emails is empty")
 	case c.Author.Email == "":
 		return errors.New("config: author.email is empty")
+	case !bareEmail(c.Author.Email):
+		return fmt.Errorf("config: author.email %q: want a bare address like you@example.com", c.Author.Email)
 	case c.Mirror.Path == "" || c.Mirror.Branch == "":
 		return errors.New("config: mirror.path and mirror.branch are required")
+	case c.Mirror.Repo != "" && !githubRepo(c.Mirror.Repo):
+		return fmt.Errorf("config: mirror.repo %q: want owner/name, the name using only letters, digits, '.', '-' and '_'", c.Mirror.Repo)
 	}
 	if c.TimePolicy != ident.PolicyExact && c.TimePolicy != ident.PolicyDateOnly {
 		return fmt.Errorf("config: time_policy %q: want exact or date-only", c.TimePolicy)
@@ -143,4 +151,18 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: mirror.visibility %q: want private or public", c.Mirror.Visibility)
 	}
 	return nil
+}
+
+// bareEmail reports whether e looks like local@domain with nothing around it.
+// GitHub links mirror commits to an account only through such an address.
+func bareEmail(e string) bool {
+	local, domain, ok := strings.Cut(e, "@")
+	return ok && local != "" && domain != "" && !strings.ContainsAny(e, " <>") && !strings.Contains(domain, "@")
+}
+
+// githubRepo reports whether r is owner/name as GitHub allows them. GitHub
+// rewrites any other name on creation, so the config would point at a repo
+// that does not exist.
+func githubRepo(r string) bool {
+	return repoPattern.MatchString(r) && !strings.HasSuffix(r, "/.") && !strings.HasSuffix(r, "/..")
 }
