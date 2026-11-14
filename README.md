@@ -29,13 +29,6 @@ Work on an employer GitLab, Bitbucket, a self-hosted Gitea or Forgejo, or an on-
 
 <p align="center">Works with GitLab, Bitbucket, Gitea, Forgejo, Codeberg, and any server you can <code>git clone</code> from.</p>
 
-<!-- Preview for review: keep pipe or bridge, drop the other. -->
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-pipe-dark.gif">
-  <img src=".github/assets/how-pipe-light.gif" alt="Commit squares from a jar of work clones flow through a pipe and valve into a GitHub contribution graph" width="640">
-</picture>
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-bridge-dark.gif">
   <img src=".github/assets/how-bridge-light.gif" alt="Commit squares cross a suspension bridge from a private forge to a GitHub contribution graph" width="640">

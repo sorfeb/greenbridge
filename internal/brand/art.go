@@ -118,30 +118,6 @@ func heroSVG(dark bool) []byte {
 
 var xmlEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
 
-// gallerySVG shows every bridge in the rotation, two per row, with captions.
-func gallerySVG(dark bool) []byte {
-	const (
-		size, cols    = 6, 2
-		colW, colGap  = W * size, 48
-		rowH, caption = H*size + 48, H*size + 22
-	)
-	p := themePalette(dark)
-	rows := (len(Bridges) + cols - 1) / cols
-	w, h := cols*colW+(cols-1)*colGap, rows*rowH-20
-	var sb strings.Builder
-	fmt.Fprintf(&sb, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" role="img">`+"\n", w, h, w, h)
-	sb.WriteString("<title>The bridges gbridge rotates through, one per day</title>\n")
-	fmt.Fprintf(&sb, `<g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="13" fill="%s">`+"\n", p.muted)
-	for i, b := range Bridges {
-		ox, oy := (i%cols)*(colW+colGap), (i/cols)*rowH
-		svgCells(&sb, bridgeCells(b, artSeed+uint32(i), p, 0, 0, 1), size, ox, oy)
-		fmt.Fprintf(&sb, `<text x="%d" y="%d"><tspan font-weight="600" fill="%s">%s</tspan>, %s</text>`+"\n",
-			ox, oy+caption, p.fg, xmlEscape.Replace(b.Name), xmlEscape.Replace(b.Where))
-	}
-	sb.WriteString("</g>\n</svg>\n")
-	return []byte(sb.String())
-}
-
 // socialPNG is GitHub's 1280x640 social preview: the dark hero on GitHub's
 // dark canvas.
 func socialPNG() []byte {
@@ -190,13 +166,29 @@ func hexColor(s string) color.RGBA {
 // Assets returns every generated brand file by name, for go generate and for
 // the test that keeps the committed copies current.
 func Assets() map[string][]byte {
-	return map[string][]byte{
+	a := map[string][]byte{
 		"hero-light.svg":     heroSVG(false),
 		"hero-dark.svg":      heroSVG(true),
-		"bridges-light.svg":  gallerySVG(false),
-		"bridges-dark.svg":   gallerySVG(true),
 		"proof-light.svg":    proofSVG(false),
 		"proof-dark.svg":     proofSVG(true),
 		"social-preview.png": socialPNG(),
 	}
+	for _, dark := range []bool{false, true} {
+		theme := "light"
+		if dark {
+			theme = "dark"
+		}
+		a["how-bridge-"+theme+".gif"] = sceneGIF(bridgeScene(), dark, bridgeCell, bridgeStep)
+		for _, f := range forges {
+			a["forge-"+f.slug+"-"+theme+".svg"] = sceneSVG(forgeScene(f), dark, forgeCell, f.name)
+		}
+	}
+	return a
 }
+
+// The bridge GIF draws each cell 10 px wide and moves its commits 5 px a
+// frame; forge logos draw each cell 4 px wide, 96 px in all.
+const (
+	bridgeCell, bridgeStep = 10, 5
+	forgeCell              = 4
+)
