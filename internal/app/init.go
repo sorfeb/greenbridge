@@ -16,7 +16,6 @@ import (
 	"github.com/sorfeb/greenbridge/internal/ghx"
 	"github.com/sorfeb/greenbridge/internal/gitx"
 	"github.com/sorfeb/greenbridge/internal/ident"
-	"github.com/sorfeb/greenbridge/internal/source"
 )
 
 // InitOptions are gbridge init flags. Anything left empty is asked for, unless
@@ -52,7 +51,7 @@ var errAborted = errors.New("aborted")
 func Init(o InitOptions, gh ghx.GitHub, in io.Reader, out io.Writer) error {
 	if p, _ := config.Path(); !o.Force {
 		if _, err := os.Stat(p); err == nil {
-			return fmt.Errorf("config exists at %s: rerun with --force to replace it", p)
+			return fmt.Errorf("config exists at %s: change emails and repos with gbridge add or gbridge remove, or rerun with --force to replace it", p)
 		}
 	}
 	cfg, err := config.Default()
@@ -72,7 +71,7 @@ func Init(o InitOptions, gh ghx.GitHub, in io.Reader, out io.Writer) error {
 	if err := askEmails(p, cfg, o.Emails); err != nil {
 		return err
 	}
-	if err := askRepos(p, cfg, o.Repos, o.Scan); err != nil {
+	if d.seen, err = askRepos(p, cfg, o.Repos, o.Scan); err != nil {
 		return err
 	}
 	if err := d.decideSecret(out, o.Secret, o.Force); err != nil {
@@ -141,68 +140,107 @@ func askEmails(p *prompter, cfg *config.Config, given []string) error {
 	return nil
 }
 
-// askRepos adds source repos to cfg: the given paths, and the repos found
-// under the scan folders (asked for when both are empty). A found repo needs
-// commits by cfg's emails; a given one is kept without. Repos already in cfg
-// are left alone.
-func askRepos(p *prompter, cfg *config.Config, paths, scan []string) error {
-	candidates := slices.Clone(paths)
-	for _, dir := range scan {
-		candidates = append(candidates, source.FindRepos(dir, 4)...)
+// askRepos adds the given paths and scan folders to cfg (folders asked for
+// when both are empty), shows which repos count, and returns the repos the
+// scan folders hold now. A named repo is kept without commits by cfg's
+// emails; a found one needs them. A scan folder is kept even when it holds
+// none yet, since plan and sync search it again every run.
+func askRepos(p *prompter, cfg *config.Config, paths, scan []string) (found []string, err error) {
+	if len(paths) == 0 && len(scan) == 0 {
+		scan = splitList(p.ask("Folders to scan for work repos, comma separated", ""))
 	}
-	if len(candidates) == 0 {
-		for _, dir := range splitList(p.ask("Folders to scan for work repos, comma separated", "")) {
-			candidates = append(candidates, source.FindRepos(dir, 4)...)
-		}
-	}
-	explicit := map[string]bool{}
-	for _, r := range paths {
-		explicit[absPath(r)] = true
-	}
-	seen := map[string]bool{}
-	for _, r := range cfg.Repos {
-		seen[r] = true
-	}
-	var added []string
-	for _, r := range candidates {
-		r = absPath(r)
-		if seen[r] {
+	var dirs []string
+	var repos []sourceRepo
+	for _, d := range scan {
+		d = absPath(d)
+		if fi, err := os.Stat(d); err != nil || !fi.IsDir() {
+			fmt.Fprintf(p.out, "  skip  %s (not a folder)\n", d)
 			continue
 		}
-		seen[r] = true
-		if keepRepo(p.out, cfg, r, explicit[r]) {
-			added = append(added, r)
+		if !slices.Contains(dirs, d) {
+			dirs, repos = append(dirs, d), append(repos, findRepos(d)...)
 		}
 	}
-	if len(added) == 0 {
-		fmt.Fprintln(p.out, "No source repos yet. Add paths to \"repos\" in the config later.")
-		return nil
+	added, found, _ := pickRepos(p.out, cfg, paths, repos)
+	if len(added) == 0 && len(dirs) == 0 {
+		fmt.Fprintln(p.out, "No source repos yet. Add them later with gbridge add repo <path> or gbridge add scan <folder>.")
+		return nil, nil
 	}
-	if !p.confirm(fmt.Sprintf("Use these %d repos?", len(added))) {
-		return errAborted
+	q := fmt.Sprintf("Use these %d repos?", len(added)+len(found))
+	if len(dirs) > 0 {
+		q = fmt.Sprintf("Use these %d repos, and search %s for new ones on every sync?", len(added)+len(found), strings.Join(dirs, ", "))
+	}
+	if !p.confirm(q) {
+		return nil, errAborted
 	}
 	cfg.Repos = append(cfg.Repos, added...)
-	return nil
+	cfg.Scan = append(cfg.Scan, dirs...)
+	return found, nil
 }
 
-// keepRepo reports whether repo r is worth mirroring under cfg, and says why
-// on out.
-func keepRepo(out io.Writer, cfg *config.Config, r string, explicit bool) bool {
-	acts, err := source.Scan(r, cfg.Emails, time.Time{})
-	if err != nil {
-		fmt.Fprintf(out, "  skip  %s (%v)\n", r, err)
-		return false
+// pickRepos judges the repos the user named (paths) and the repos found in
+// scan folders against cfg, says why on out, and sorts them: named repos to
+// add to cfg.Repos, found repos worth mirroring, and named repos refused, all
+// as absolute paths. Repos already in cfg.Repos are left alone. It reads each
+// repo the way plan does.
+func pickRepos(out io.Writer, cfg *config.Config, paths []string, found []sourceRepo) (added, kept, refused []string) {
+	have := map[string]bool{}
+	for _, r := range cfg.Repos {
+		have[filepath.Clean(r)] = true
 	}
-	hosted, _ := source.HasGitHubRemote(r)
+	var repos []sourceRepo
+	listed := map[string]bool{}
+	for _, r := range append(namedRepos(paths), found...) {
+		if !listed[r.path] {
+			listed[r.path] = true
+			repos = append(repos, r)
+		}
+	}
+	ins := inspectAll(cfg, repos, time.Time{})
+	for i, r := range repos {
+		named := r.scan == ""
+		switch {
+		case have[r.path]:
+			fmt.Fprintf(out, "  have  %s (already in config)\n", r.path)
+		case !keepRepo(out, r.path, named, ins[i]):
+			if named {
+				refused = append(refused, r.path)
+			}
+		case named:
+			added = append(added, r.path)
+		default:
+			kept = append(kept, r.path)
+		}
+	}
+	return added, kept, refused
+}
+
+func namedRepos(paths []string) []sourceRepo {
+	out := make([]sourceRepo, 0, len(paths))
+	for _, p := range paths {
+		out = append(out, sourceRepo{path: absPath(p)})
+	}
+	return out
+}
+
+// keepRepo reports whether repo r is worth mirroring, given what inspecting
+// it found, and says why on out.
+func keepRepo(out io.Writer, r string, named bool, in inspection) bool {
 	switch {
-	case hosted && !cfg.IncludeGitHubRepos:
+	case in.err != nil:
+		fmt.Fprintf(out, "  skip  %s (%v)\n", r, in.err)
+		return false
+	case in.hosted:
 		fmt.Fprintf(out, "  skip  %s (github.com remote, GitHub already counts it; --include-github to override)\n", r)
 		return false
-	case len(acts) == 0 && !explicit:
+	case len(in.acts) == 0 && !named:
 		fmt.Fprintf(out, "  skip  %s (no commits by these emails)\n", r)
 		return false
+	case named:
+		fmt.Fprintf(out, "  add   %s (%d commits)\n", r, len(in.acts))
+	default:
+		fmt.Fprintf(out, "  found %s (%d commits)\n", r, len(in.acts))
 	}
-	fmt.Fprintf(out, "  add   %s (%d commits)\n", r, len(acts))
 	return true
 }
 
@@ -210,9 +248,10 @@ func keepRepo(out io.Writer, cfg *config.Config, r string, explicit bool) bool {
 // go with it. apply carries them out.
 type draft struct {
 	cfg      *config.Config
-	secret   []byte // to write; nil keeps the secret on disk
-	imported bool   // secret came from a recovery phrase, so there is none to show
-	create   string // mirror repo name to create on GitHub; empty creates none
+	secret   []byte   // to write; nil keeps the secret on disk
+	imported bool     // secret came from a recovery phrase, so there is none to show
+	create   string   // mirror repo name to create on GitHub; empty creates none
+	seen     []string // repos init showed from scan folders, recorded so plan does not call them new
 }
 
 // decideSecret picks the secret: the given recovery phrase, else the one on
@@ -293,8 +332,8 @@ func (d *draft) askMirror(p *prompter, gh ghx.GitHub, o InitOptions) error {
 }
 
 // apply validates the draft, then writes the secret, creates the GitHub repo,
-// saves the config and ensures the local mirror, in that order. An invalid
-// draft writes nothing.
+// saves the config and the repos seen in scan folders, and ensures the local
+// mirror, in that order. An invalid draft writes nothing.
 func (d *draft) apply(gh ghx.GitHub, out io.Writer) error {
 	if err := d.cfg.Validate(); err != nil {
 		return err
@@ -311,6 +350,9 @@ func (d *draft) apply(gh ghx.GitHub, out io.Writer) error {
 		fmt.Fprintf(out, "Created %s\n", d.cfg.Mirror.Repo)
 	}
 	if err := d.cfg.Save(); err != nil {
+		return err
+	}
+	if err := config.AddSeen(d.seen); err != nil {
 		return err
 	}
 	return MirrorOf(d.cfg).Ensure()

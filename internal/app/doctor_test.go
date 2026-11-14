@@ -155,6 +155,16 @@ func TestDiagnose(t *testing.T) {
 			want: map[string]status{"repos": statusFail, "mirror": statusOK},
 		},
 		{
+			name: "scan folder missing",
+			cfg:  func(c *config.Config) { c.Scan = []string{filepath.Join(t.TempDir(), "gone")} },
+			want: map[string]status{"repos": statusFail, "mirror": statusOK},
+		},
+		{
+			name: "scan folder only",
+			cfg:  func(c *config.Config) { c.Scan = []string{t.TempDir()} },
+			want: map[string]status{"repos": statusOK},
+		},
+		{
 			name: "no config",
 			home: homeEmpty,
 			want: map[string]status{

@@ -30,15 +30,34 @@ type SyncResult struct {
 	Existing int
 	Added    int
 	Pushed   bool
+	NewRepos []RepoStat // repos a scan folder contributed for the first time
 }
 
-// Sync brings the mirror up to date: ComputePlan, then Publish.
+// Sync brings the mirror up to date: ComputePlan, then Publish. Unless it is
+// a dry run, it then records the new repos found in scan folders, so the
+// next run no longer calls them new.
 func Sync(cfg *config.Config, secret []byte, opt SyncOptions, log io.Writer) (*SyncResult, error) {
 	p, err := ComputePlan(cfg, secret, PlanOptions{Since: opt.Since})
 	if err != nil {
 		return nil, err
 	}
-	return Publish(cfg, p, PublishOptions{DryRun: opt.DryRun, NoPush: opt.NoPush}, log)
+	res, err := Publish(cfg, p, PublishOptions{DryRun: opt.DryRun, NoPush: opt.NoPush}, log)
+	if err != nil {
+		return nil, err
+	}
+	res.NewRepos = p.NewRepos()
+	if opt.DryRun {
+		return res, nil
+	}
+	var paths []string
+	for _, r := range res.NewRepos {
+		paths = append(paths, r.Path)
+	}
+	// The mirror is already written; a lost record only repeats the notice.
+	if err := config.AddSeen(paths); err != nil {
+		fmt.Fprintf(log, "could not record repos found in scan folders: %v\n", err)
+	}
+	return res, nil
 }
 
 // Publish writes the plan's new entries to the mirror and pushes them. It

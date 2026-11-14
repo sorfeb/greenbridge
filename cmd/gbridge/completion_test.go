@@ -66,7 +66,7 @@ func TestBashCompletion(t *testing.T) {
 		want  []string
 	}{
 		{[]string{"gbridge", "sy"}, []string{"sync"}},
-		{[]string{"gbridge", "c"}, []string{"completion"}},
+		{[]string{"gbridge", "c"}, []string{"completion", "config"}},
 		{[]string{"gbridge", "init", "--sc"}, []string{"--scan"}},
 		{[]string{"gbridge", "plan", "--"}, []string{"--offline", "--since", "--weeks"}},
 		{[]string{"gbridge", "backfill", "--d"}, []string{"--dry-run"}},
