@@ -52,7 +52,7 @@ var errAborted = errors.New("aborted")
 func Init(o InitOptions, gh ghx.GitHub, in io.Reader, out io.Writer) error {
 	if p, _ := config.Path(); !o.Force {
 		if _, err := os.Stat(p); err == nil {
-			return fmt.Errorf("config exists at %s: rerun with --force to replace it", p)
+			return fmt.Errorf("config exists at %s: change emails and repos with gbridge add or gbridge remove, or rerun with --force to replace it", p)
 		}
 	}
 	cfg, err := config.Default()
@@ -142,40 +142,17 @@ func askEmails(p *prompter, cfg *config.Config, given []string) error {
 }
 
 // askRepos adds source repos to cfg: the given paths, and the repos found
-// under the scan folders (asked for when both are empty). A found repo needs
-// commits by cfg's emails; a given one is kept without. Repos already in cfg
-// are left alone.
+// under the scan folders (asked for when both find nothing). A found repo
+// needs commits by cfg's emails; a given one is kept without. Repos already
+// in cfg are left alone.
 func askRepos(p *prompter, cfg *config.Config, paths, scan []string) error {
-	candidates := slices.Clone(paths)
-	for _, dir := range scan {
-		candidates = append(candidates, source.FindRepos(dir, 4)...)
-	}
+	candidates := repoCandidates(paths, scan)
 	if len(candidates) == 0 {
-		for _, dir := range splitList(p.ask("Folders to scan for work repos, comma separated", "")) {
-			candidates = append(candidates, source.FindRepos(dir, 4)...)
-		}
+		candidates = repoCandidates(nil, splitList(p.ask("Folders to scan for work repos, comma separated", "")))
 	}
-	explicit := map[string]bool{}
-	for _, r := range paths {
-		explicit[absPath(r)] = true
-	}
-	seen := map[string]bool{}
-	for _, r := range cfg.Repos {
-		seen[r] = true
-	}
-	var added []string
-	for _, r := range candidates {
-		r = absPath(r)
-		if seen[r] {
-			continue
-		}
-		seen[r] = true
-		if keepRepo(p.out, cfg, r, explicit[r]) {
-			added = append(added, r)
-		}
-	}
+	added, _ := pickRepos(p.out, cfg, candidates, paths)
 	if len(added) == 0 {
-		fmt.Fprintln(p.out, "No source repos yet. Add paths to \"repos\" in the config later.")
+		fmt.Fprintln(p.out, "No source repos yet. Add them later with gbridge add repo <path> or gbridge add scan <folder>.")
 		return nil
 	}
 	if !p.confirm(fmt.Sprintf("Use these %d repos?", len(added))) {
@@ -183,6 +160,46 @@ func askRepos(p *prompter, cfg *config.Config, paths, scan []string) error {
 	}
 	cfg.Repos = append(cfg.Repos, added...)
 	return nil
+}
+
+// repoCandidates returns paths, then the repos found under each scan folder.
+func repoCandidates(paths, scan []string) []string {
+	candidates := slices.Clone(paths)
+	for _, dir := range scan {
+		candidates = append(candidates, source.FindRepos(dir, 4)...)
+	}
+	return candidates
+}
+
+// pickRepos judges each candidate against cfg, says why on out, and returns
+// the new repos worth mirroring as absolute paths. A candidate listed in
+// explicit is kept without commits by cfg's emails; refused lists the
+// explicit ones that were not kept. Repos already in cfg are left alone.
+func pickRepos(out io.Writer, cfg *config.Config, candidates, explicit []string) (added, refused []string) {
+	given := map[string]bool{}
+	for _, r := range explicit {
+		given[absPath(r)] = true
+	}
+	have := map[string]bool{}
+	for _, r := range cfg.Repos {
+		have[r] = true
+	}
+	seen := map[string]bool{}
+	for _, r := range candidates {
+		r = absPath(r)
+		switch {
+		case seen[r]:
+			continue
+		case have[r]:
+			fmt.Fprintf(out, "  have  %s (already in config)\n", r)
+		case keepRepo(out, cfg, r, given[r]):
+			added = append(added, r)
+		case given[r]:
+			refused = append(refused, r)
+		}
+		seen[r] = true
+	}
+	return added, refused
 }
 
 // keepRepo reports whether repo r is worth mirroring under cfg, and says why
