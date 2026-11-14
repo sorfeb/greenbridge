@@ -21,9 +21,11 @@ var update = flag.Bool("update", false, "rewrite testdata/*.golden from the code
 var testSecret = bytes.Repeat([]byte{7}, ident.SecretSize)
 
 // mirrored returns a config with one source repo at tmp/src and a private
-// mirror pushing to the bare repo tmp/remote.git.
+// mirror pushing to the bare repo tmp/remote.git. The greenbridge home is
+// tmp/home.
 func mirrored(t *testing.T, tmp string) *config.Config {
 	t.Helper()
+	t.Setenv("GBRIDGE_HOME", filepath.Join(tmp, "home"))
 	gittest.Init(t, filepath.Join(tmp, "src"))
 	gittest.InitBare(t, filepath.Join(tmp, "remote.git"))
 	cfg := &config.Config{

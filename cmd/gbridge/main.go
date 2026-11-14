@@ -253,6 +253,7 @@ func runSync(name string, args []string) error {
 	if err != nil {
 		return err
 	}
+	app.WriteNewRepos(os.Stdout, res.NewRepos)
 	verb := "added"
 	if f.dry {
 		verb = "would add"
