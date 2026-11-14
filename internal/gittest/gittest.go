@@ -47,9 +47,27 @@ func InitBare(tb testing.TB, dir string) {
 // date (RFC 3339).
 func Commit(tb testing.TB, repo, email, date string) {
 	tb.Helper()
+	CommitAs(tb, repo, "w", email, date)
+}
+
+// CommitAs is Commit with an author and committer name.
+func CommitAs(tb testing.TB, repo, name, email, date string) {
+	tb.Helper()
 	env := []string{
-		"GIT_AUTHOR_NAME=w", "GIT_AUTHOR_EMAIL=" + email, "GIT_AUTHOR_DATE=" + date,
-		"GIT_COMMITTER_NAME=w", "GIT_COMMITTER_EMAIL=" + email, "GIT_COMMITTER_DATE=" + date,
+		"GIT_AUTHOR_NAME=" + name, "GIT_AUTHOR_EMAIL=" + email, "GIT_AUTHOR_DATE=" + date,
+		"GIT_COMMITTER_NAME=" + name, "GIT_COMMITTER_EMAIL=" + email, "GIT_COMMITTER_DATE=" + date,
 	}
 	Git(tb, repo, env, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", Message)
+}
+
+// CommitOnRef adds a commit reachable only from ref, the way tools such as
+// editor checkpoints write under refs/<tool>/. HEAD must already have a
+// commit; the checked-out branch stays where it was.
+func CommitOnRef(tb testing.TB, repo, ref, name, email, date string) {
+	tb.Helper()
+	branch := Git(tb, repo, nil, "symbolic-ref", "--short", "HEAD")
+	Git(tb, repo, nil, "checkout", "-q", "--detach")
+	CommitAs(tb, repo, name, email, date)
+	Git(tb, repo, nil, "update-ref", ref, "HEAD")
+	Git(tb, repo, nil, "checkout", "-q", branch)
 }
