@@ -286,6 +286,50 @@ func TestDoctorFlagsUnlistedEmails(t *testing.T) {
 	}
 }
 
+// A commit made under the user's name with a coworker's email (a shared
+// machine, a pairing setup) must not lead to adding that email: every commit
+// the coworker made under it would then be mirrored as the user's.
+func TestDoctorNeverSuggestsSharedEmail(t *testing.T) {
+	gittest.Need(t)
+	isolateGitConfig(t, "")
+	repo := filepath.Join(t.TempDir(), "work")
+	gittest.Init(t, repo)
+	recent := func(days int) string { return time.Now().AddDate(0, 0, -days).Format(time.RFC3339) }
+
+	gittest.CommitAs(t, repo, "Me Dev", "me@work.example", recent(30))
+	gittest.CommitAs(t, repo, "Me Dev", "pair@work.example", recent(20))
+	gittest.CommitAs(t, repo, "Pair Partner", "pair@work.example", recent(15))
+	gittest.CommitAs(t, repo, "Pair Partner", "pair@work.example", recent(10))
+
+	doctorHome(t, homeFull, func(c *config.Config) { c.Repos = []string{repo} })
+	var got []result
+	for _, r := range diagnose(healthyGitHub()) {
+		if r.check == "emails" {
+			got = append(got, r)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("emails results = %+v, want exactly one", got)
+	}
+	r := got[0]
+	if r.status != statusOK || r.fix != "" {
+		t.Errorf("result = %+v, want ok with no fix: nothing safe to add", r)
+	}
+	for _, want := range []string{"1 commit", "pair@work.example", "2 commits under other author names"} {
+		if !strings.Contains(r.msg, want) {
+			t.Errorf("msg = %q, want it to contain %q", r.msg, want)
+		}
+	}
+
+	var out bytes.Buffer
+	Doctor(&out, healthyGitHub())
+	for _, leak := range []string{"gbridge add email pair@work.example", "Pair Partner"} {
+		if strings.Contains(out.String(), leak) {
+			t.Errorf("doctor output contains %q:\n%s", leak, out.String())
+		}
+	}
+}
+
 func TestDoctorPrintsSkipped(t *testing.T) {
 	doctorHome(t, homeFull, nil)
 	var out bytes.Buffer

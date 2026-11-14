@@ -207,7 +207,8 @@ func checkRepos(f *facts) []result {
 // checkEmails warns about commits under an email missing from config. In a
 // shared repo most unlisted authors are coworkers, so only commits under the
 // user's own author name count: a name on commits by a configured email, or
-// git's user.name. Only the email and a count are printed.
+// git's user.name. An email that also carries other names is reported but
+// never suggested. Only the email and counts are printed.
 func checkEmails(f *facts) []result {
 	const check = "emails"
 	if f.cfgErr != nil {
@@ -228,11 +229,18 @@ func checkEmails(f *facts) []result {
 			}
 		}
 	}
-	counts := map[string]int{}
+	// others counts commits under other names on the same unlisted email: a
+	// coworker's address the user once committed with. Adding it would mirror
+	// the coworker's work as the user's, so such an email gets no fix.
+	counts, others := map[string]int{}, map[string]int{}
 	for _, r := range f.repos {
 		for _, a := range r.authors {
-			if !listed[a.Email] && names[strings.ToLower(a.Name)] {
+			switch {
+			case listed[a.Email]:
+			case names[strings.ToLower(a.Name)]:
 				counts[a.Email] += a.Commits
+			default:
+				others[a.Email] += a.Commits
 			}
 		}
 	}
@@ -243,15 +251,22 @@ func checkEmails(f *facts) []result {
 	slices.SortFunc(emails, func(a, b string) int { return cmp.Or(counts[b]-counts[a], strings.Compare(a, b)) })
 	rs := make([]result, 0, len(emails))
 	for _, e := range emails {
-		noun := "commits"
-		if counts[e] == 1 {
-			noun = "commit"
+		mine := fmt.Sprintf("%s in %s under your author name use %s", plural(counts[e], "commit"), emailWindow, e)
+		if others[e] > 0 {
+			rs = append(rs, ok(check, fmt.Sprintf("%s, which also has %s under other author names: left out",
+				mine, plural(others[e], "commit"))))
+			continue
 		}
-		msg := fmt.Sprintf("%d %s in %s under your author name use %s, which is not in config emails",
-			counts[e], noun, emailWindow, e)
-		rs = append(rs, result{check, statusWarn, msg, "gbridge add email " + e})
+		rs = append(rs, result{check, statusWarn, mine + ", which is not in config emails", "gbridge add email " + e})
 	}
 	return rs
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func checkGH(f *facts) result {
