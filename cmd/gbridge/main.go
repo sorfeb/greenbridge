@@ -45,6 +45,9 @@ type command struct {
 
 var commands = []command{
 	{"init", "set up emails, source repos, secret, and the mirror repo", func() *flag.FlagSet { return new(initFlags).set() }},
+	{"add", "add to the config: add email|repo|scan <value>...", nil},
+	{"remove", "remove from the config: remove email|repo <value>...", nil},
+	{"config", "print the current setup", nil},
 	{"plan", "preview what would be mirrored (writes nothing)", func() *flag.FlagSet { return new(planFlags).set() }},
 	{"sync", "mirror new activity and push", func() *flag.FlagSet { return new(syncFlags).set("sync") }},
 	{"backfill", "alias for sync; use --since to limit history", func() *flag.FlagSet { return new(syncFlags).set("backfill") }},
@@ -90,6 +93,10 @@ func main() {
 	switch cmd, args := os.Args[1], os.Args[2:]; cmd {
 	case "init":
 		err = runInit(args)
+	case "add", "remove":
+		err = runEdit(cmd, args)
+	case "config":
+		err = app.ShowConfig(os.Stdout)
 	case "plan":
 		err = runPlan(args)
 	case "sync", "backfill":
@@ -146,6 +153,19 @@ func runInit(args []string) error {
 	f.o.Emails, f.o.Repos, f.o.Scan = f.emails, f.repos.list, f.scan.list
 	banner(os.Stdout)
 	return app.Init(f.o, ghx.NewCLI(), os.Stdin, os.Stdout)
+}
+
+// runEdit runs gbridge add or remove: the first argument is the kind, the
+// rest are values.
+func runEdit(cmd string, args []string) error {
+	kind := ""
+	if len(args) > 0 {
+		kind, args = args[0], args[1:]
+	}
+	if cmd == "add" {
+		return app.Add(kind, args, os.Stdout)
+	}
+	return app.Remove(kind, args, os.Stdout)
 }
 
 func load() (*config.Config, []byte, error) {

@@ -1,0 +1,19 @@
+config       $TMP/config.json
+emails       me@work.com
+             alt@work.local
+repos        $TMP/work/api
+             $TMP/work/web
+mirror       octocat/greenbridge-activity, private, branch main
+             local clone $TMP/mirror.git
+timestamps   exact
+author       octocat <583231+octocat@users.noreply.github.com>
+---
+config       $TMP/config.json
+emails       me@work.com
+             alt@work.local
+repos        none (gbridge add repo <path> or gbridge add scan <folder>)
+             repos with a github.com remote included (counts twice)
+mirror       local only, nothing reaches GitHub
+             local clone $TMP/mirror.git
+timestamps   exact
+author       octocat <583231+octocat@users.noreply.github.com>
