@@ -1,11 +1,15 @@
 package app
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/sorfeb/greenbridge/internal/config"
 	"github.com/sorfeb/greenbridge/internal/ghx"
@@ -82,7 +86,18 @@ type repoFacts struct {
 	missing   bool
 	notGit    bool
 	hasGitHub bool
+
+	// authors made commits in the last year on the refs sync reads. userName
+	// is git's user.name in the repo, empty when unset.
+	authors  []source.Author
+	userName string
 }
+
+// emailWindow is how far back doctor looks for commits under unlisted
+// emails: the year the contribution graph shows.
+const emailWindow = "the last year"
+
+func emailSince() time.Time { return time.Now().AddDate(-1, 0, 0) }
 
 func gather(gh ghx.GitHub) *facts {
 	f := &facts{}
@@ -103,6 +118,10 @@ func gather(gh ghx.GitHub) *facts {
 			rf.notGit = true
 		} else {
 			rf.hasGitHub = hasGitHub
+			if !hasGitHub || f.cfg.IncludeGitHubRepos {
+				rf.authors, _ = source.Authors(repo, emailSince())
+				rf.userName, _ = gitx.Git(repo, "config", "user.name")
+			}
 		}
 		f.repos = append(f.repos, rf)
 	}
@@ -123,6 +142,7 @@ func diagnose(gh ghx.GitHub) []result {
 	f := gather(gh)
 	rs := []result{checkGit(f), checkConfig(f), checkSecret(f)}
 	rs = append(rs, checkRepos(f)...)
+	rs = append(rs, checkEmails(f)...)
 	return append(rs,
 		checkGH(f),
 		checkAuthorEmail(f),
@@ -180,6 +200,56 @@ func checkRepos(f *facts) []result {
 		default:
 			rs = append(rs, ok("repos", "source repo "+r.path))
 		}
+	}
+	return rs
+}
+
+// checkEmails warns about commits under an email missing from config. In a
+// shared repo most unlisted authors are coworkers, so only commits under the
+// user's own author name count: a name on commits by a configured email, or
+// git's user.name. Only the email and a count are printed.
+func checkEmails(f *facts) []result {
+	const check = "emails"
+	if f.cfgErr != nil {
+		return []result{skipped(check, "config")}
+	}
+	listed := map[string]bool{}
+	for _, e := range f.cfg.Emails {
+		listed[strings.ToLower(strings.TrimSpace(e))] = true
+	}
+	names := map[string]bool{}
+	for _, r := range f.repos {
+		if n := strings.ToLower(strings.TrimSpace(r.userName)); n != "" {
+			names[n] = true
+		}
+		for _, a := range r.authors {
+			if listed[a.Email] && a.Name != "" {
+				names[strings.ToLower(a.Name)] = true
+			}
+		}
+	}
+	counts := map[string]int{}
+	for _, r := range f.repos {
+		for _, a := range r.authors {
+			if !listed[a.Email] && names[strings.ToLower(a.Name)] {
+				counts[a.Email] += a.Commits
+			}
+		}
+	}
+	if len(counts) == 0 {
+		return []result{ok(check, "no commits in "+emailWindow+" under your author name and an unlisted email")}
+	}
+	emails := slices.Collect(maps.Keys(counts))
+	slices.SortFunc(emails, func(a, b string) int { return cmp.Or(counts[b]-counts[a], strings.Compare(a, b)) })
+	rs := make([]result, 0, len(emails))
+	for _, e := range emails {
+		noun := "commits"
+		if counts[e] == 1 {
+			noun = "commit"
+		}
+		msg := fmt.Sprintf("%d %s in %s under your author name use %s, which is not in config emails",
+			counts[e], noun, emailWindow, e)
+		rs = append(rs, result{check, statusWarn, msg, "gbridge add email " + e})
 	}
 	return rs
 }
@@ -280,6 +350,10 @@ func Doctor(w io.Writer, gh ghx.GitHub) int {
 		case statusFail:
 			fails++
 			fmt.Fprintf(w, "             fix: %s\n", r.fix)
+		case statusWarn:
+			if r.fix != "" {
+				fmt.Fprintf(w, "             fix: %s\n", r.fix)
+			}
 		case statusUnverified:
 			fmt.Fprintf(w, "             check: %s\n", r.fix)
 		}
