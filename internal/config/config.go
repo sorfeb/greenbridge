@@ -37,6 +37,7 @@ type Config struct {
 	Version            int      `json:"version"`
 	Emails             []string `json:"emails"`
 	Repos              []string `json:"repos"`
+	Scan               []string `json:"scan,omitempty"` // folders searched for repos on every plan and sync
 	IncludeGitHubRepos bool     `json:"include_github_repos"`
 	Mirror             Mirror   `json:"mirror"`
 	Author             Author   `json:"author"`

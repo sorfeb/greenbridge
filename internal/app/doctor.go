@@ -68,6 +68,7 @@ type facts struct {
 	secretPath string
 
 	repos []repoFacts
+	scans []scanFacts
 
 	account    ghx.Account
 	accountErr error
@@ -75,6 +76,14 @@ type facts struct {
 	emailsErr  error
 	mirror     ghx.Repo
 	mirrorErr  error
+}
+
+// scanFacts is one scan folder: whether it exists, and how many repos it
+// holds. Doctor only lists scan folders; plan and sync judge their repos.
+type scanFacts struct {
+	path    string
+	missing bool
+	repos   int
 }
 
 type repoFacts struct {
@@ -105,6 +114,15 @@ func gather(gh ghx.GitHub) *facts {
 			rf.hasGitHub = hasGitHub
 		}
 		f.repos = append(f.repos, rf)
+	}
+	for _, dir := range f.cfg.Scan {
+		sf := scanFacts{path: dir}
+		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+			sf.missing = true
+		} else {
+			sf.repos = len(findRepos(dir))
+		}
+		f.scans = append(f.scans, sf)
 	}
 	if f.accountErr != nil {
 		return f
@@ -165,20 +183,27 @@ func checkRepos(f *facts) []result {
 	if f.cfgErr != nil {
 		return []result{skipped("repos", "config")}
 	}
-	if len(f.repos) == 0 {
-		return []result{warn("repos", "no source repos in config, nothing to mirror")}
+	if len(f.repos) == 0 && len(f.scans) == 0 {
+		return []result{warn("repos", "no source repos or scan folders in config, nothing to mirror")}
 	}
 	var rs []result
 	for _, r := range f.repos {
 		switch {
 		case r.missing:
-			rs = append(rs, fail("repos", "source repo missing: "+r.path, "remove it from config repos or restore the clone"))
+			rs = append(rs, fail("repos", "source repo missing: "+r.path, "gbridge remove repo "+r.path+", or restore the clone"))
 		case r.notGit:
-			rs = append(rs, fail("repos", "not a git repo: "+r.path, "remove it from config repos"))
+			rs = append(rs, fail("repos", "not a git repo: "+r.path, "gbridge remove repo "+r.path))
 		case r.hasGitHub && f.cfg.IncludeGitHubRepos:
 			rs = append(rs, warn("repos", "github.com remote on an included repo, counts twice: "+r.path))
 		default:
 			rs = append(rs, ok("repos", "source repo "+r.path))
+		}
+	}
+	for _, s := range f.scans {
+		if s.missing {
+			rs = append(rs, fail("repos", "scan folder missing: "+s.path, "gbridge remove scan "+s.path+", or restore the folder"))
+		} else {
+			rs = append(rs, ok("repos", fmt.Sprintf("scan folder %s (%d git repos)", s.path, s.repos)))
 		}
 	}
 	return rs

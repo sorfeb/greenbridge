@@ -1,0 +1,22 @@
+      0  $TMP/src
+      1  $TMP/work/api
+      1  $TMP/work/later
+      1  $TMP/work/team/web
+  skip $TMP/gone: scan folder not found
+  new   $TMP/work/later (from scan folder $TMP/work)
+
+3 commits matched, 3 after dedup, 2025-01-02 to 2025-01-04
+already in mirror: 2, would add: 1
+
+year    commits  active days
+2025          3            3
+
+     J
+Sun ··
+    · 
+Tue · 
+    · 
+Thu ░ 
+    ░ 
+Sat ░ 
+    less ·░▒▓█ more

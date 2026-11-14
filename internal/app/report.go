@@ -18,6 +18,7 @@ func (p *Plan) Report(w io.Writer, today time.Time, weeks int, paint brand.Paint
 			fmt.Fprintf(w, "  %5d  %s\n", r.Matched, r.Path)
 		}
 	}
+	WriteNewRepos(w, p.NewRepos())
 	fmt.Fprintf(w, "\n%d commits matched, %d after dedup", p.Matched, len(p.Entries))
 	if len(p.Entries) > 0 {
 		fmt.Fprintf(w, ", %s to %s", DayKey(p.Entries[0].Time), DayKey(p.Entries[len(p.Entries)-1].Time))
