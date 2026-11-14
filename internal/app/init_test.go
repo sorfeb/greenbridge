@@ -107,9 +107,13 @@ func TestInitInteractive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantRepo, _ := filepath.Abs(mine)
-	if !slices.Equal(cfg.Emails, []string{testWorkEmail}) || !slices.Equal(cfg.Repos, []string{wantRepo}) {
-		t.Errorf("config emails %v repos %v, want [%s] [%s]", cfg.Emails, cfg.Repos, testWorkEmail, wantRepo)
+	// The folder is kept, so later clones are found; what it holds now is
+	// recorded as seen, since init already showed it.
+	if !slices.Equal(cfg.Emails, []string{testWorkEmail}) || len(cfg.Repos) != 0 || !slices.Equal(cfg.Scan, []string{work}) {
+		t.Errorf("config emails %v repos %v scan %v, want [%s] [] [%s]", cfg.Emails, cfg.Repos, cfg.Scan, testWorkEmail, work)
+	}
+	if seen, err := config.LoadSeen(); err != nil || len(seen) != 1 || !seen[mine] {
+		t.Errorf("seen = %v, %v; want %s only", seen, err, mine)
 	}
 	if !cfg.NoticeAccepted || cfg.Mirror.Repo != testMirror || cfg.Mirror.Remote != "https://github.com/"+testMirror+".git" {
 		t.Errorf("config notice %v mirror %+v", cfg.NoticeAccepted, cfg.Mirror)

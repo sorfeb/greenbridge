@@ -46,7 +46,7 @@ type command struct {
 var commands = []command{
 	{"init", "set up emails, source repos, secret, and the mirror repo", func() *flag.FlagSet { return new(initFlags).set() }},
 	{"add", "add to the config: add email|repo|scan <value>...", nil},
-	{"remove", "remove from the config: remove email|repo <value>...", nil},
+	{"remove", "remove from the config: remove email|repo|scan <value>...", nil},
 	{"config", "print the current setup", nil},
 	{"plan", "preview what would be mirrored (writes nothing)", func() *flag.FlagSet { return new(planFlags).set() }},
 	{"sync", "mirror new activity and push", func() *flag.FlagSet { return new(syncFlags).set("sync") }},
@@ -134,7 +134,7 @@ func (f *initFlags) set() *flag.FlagSet {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	fs.Var(&f.emails, "email", "work email to match (repeatable)")
 	fs.Var(&f.repos, "repo", "source repo path (repeatable)")
-	fs.Var(&f.scan, "scan", "folder to search for repos (repeatable)")
+	fs.Var(&f.scan, "scan", "folder searched for repos on every plan and sync (repeatable)")
 	fs.BoolVar(&f.o.IncludeGitHub, "include-github", false, "include repos with a github.com remote (double counts)")
 	fs.StringVar(&f.o.MirrorName, "mirror", "", "mirror repo name (default greenbridge-activity)")
 	fs.BoolVar(&f.o.LocalOnly, "local-only", false, "keep the mirror local; create nothing on GitHub")
