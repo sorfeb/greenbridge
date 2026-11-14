@@ -172,9 +172,9 @@ func checkRepos(f *facts) []result {
 	for _, r := range f.repos {
 		switch {
 		case r.missing:
-			rs = append(rs, fail("repos", "source repo missing: "+r.path, "remove it from config repos or restore the clone"))
+			rs = append(rs, fail("repos", "source repo missing: "+r.path, "gbridge remove repo "+r.path+", or restore the clone"))
 		case r.notGit:
-			rs = append(rs, fail("repos", "not a git repo: "+r.path, "remove it from config repos"))
+			rs = append(rs, fail("repos", "not a git repo: "+r.path, "gbridge remove repo "+r.path))
 		case r.hasGitHub && f.cfg.IncludeGitHubRepos:
 			rs = append(rs, warn("repos", "github.com remote on an included repo, counts twice: "+r.path))
 		default:
