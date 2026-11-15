@@ -3,12 +3,15 @@ package app
 import (
 	"bytes"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sorfeb/greenbridge/internal/config"
 	"github.com/sorfeb/greenbridge/internal/ghx"
+	"github.com/sorfeb/greenbridge/internal/gittest"
 	"github.com/sorfeb/greenbridge/internal/ident"
 )
 
@@ -76,7 +79,7 @@ func TestDiagnose(t *testing.T) {
 		{
 			name: "healthy",
 			want: map[string]status{
-				"config": statusOK, "secret": statusOK, "gh": statusOK, "author email": statusOK,
+				"config": statusOK, "secret": statusOK, "emails": statusOK, "gh": statusOK, "author email": statusOK,
 				"mirror": statusOK, "mirror branch": statusOK, "private contributions": statusUnverified,
 			},
 		},
@@ -168,7 +171,7 @@ func TestDiagnose(t *testing.T) {
 			name: "no config",
 			home: homeEmpty,
 			want: map[string]status{
-				"config": statusFail, "secret": statusFail, "repos": statusSkipped, "gh": statusOK,
+				"config": statusFail, "secret": statusFail, "repos": statusSkipped, "emails": statusSkipped, "gh": statusOK,
 				"author email": statusSkipped, "mirror": statusSkipped, "mirror branch": statusSkipped,
 			},
 		},
@@ -222,6 +225,118 @@ func TestDoctorNamesInitOnce(t *testing.T) {
 	}
 	if n := strings.Count(out.String(), "run gbridge init"); n != 1 {
 		t.Errorf("missing secret: %q appears %d times, want 1:\n%s", "run gbridge init", n, out.String())
+	}
+}
+
+// isolateGitConfig points git at an empty global config holding only
+// user.name (none when empty), so the machine's own config can't leak in.
+func isolateGitConfig(t *testing.T, userName string) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "gitconfig")
+	body := ""
+	if userName != "" {
+		body = "[user]\n\tname = " + userName + "\n"
+	}
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", p)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+}
+
+// Commits under an email missing from config never reach the graph. Doctor
+// names such an email when its commits carry the user's own author name, and
+// stays quiet about coworkers, old history, and tool refs.
+func TestDoctorFlagsUnlistedEmails(t *testing.T) {
+	gittest.Need(t)
+	isolateGitConfig(t, "Laptop Me")
+	repo := filepath.Join(t.TempDir(), "work")
+	gittest.Init(t, repo)
+	recent := func(days int) string { return time.Now().AddDate(0, 0, -days).Format(time.RFC3339) }
+
+	gittest.CommitAs(t, repo, "Me Dev", "me@work.example", recent(30))
+	gittest.CommitAs(t, repo, "me dev", "Old@Laptop.example", recent(20)) // same name, any case
+	gittest.CommitAs(t, repo, "Me Dev", "old@laptop.example", recent(10))
+	gittest.CommitAs(t, repo, "Laptop Me", "me@laptop.local", recent(5)) // git's user.name
+	gittest.CommitAs(t, repo, "Coworker", "coworker@work.example", recent(5))
+	gittest.CommitAs(t, repo, "Me Dev", "ancient@laptop.example", recent(800))
+	gittest.CommitOnRef(t, repo, "refs/t3/checkpoints/x/turn/1", "Me Dev", "t3code@users.noreply.github.com", recent(1))
+
+	doctorHome(t, homeFull, func(c *config.Config) { c.Repos = []string{repo} })
+	var warns []result
+	for _, r := range diagnose(healthyGitHub()) {
+		if r.check == "emails" {
+			warns = append(warns, r)
+		}
+	}
+	want := []struct {
+		email string
+		count string
+	}{{"old@laptop.example", "2 commits in"}, {"me@laptop.local", "1 commit in"}}
+	if len(warns) != len(want) {
+		t.Fatalf("emails results = %+v, want one warning each for %+v", warns, want)
+	}
+	for i, w := range want {
+		r := warns[i]
+		if r.status != statusWarn || !strings.Contains(r.msg, w.email) || !strings.Contains(r.msg, w.count) ||
+			r.fix != "gbridge add email "+w.email {
+			t.Errorf("result %d = %+v, want a warning naming %s with %s and its fix", i, r, w.email, w.count)
+		}
+	}
+
+	var out bytes.Buffer
+	Doctor(&out, healthyGitHub())
+	for _, leak := range []string{"coworker", "Coworker", "ancient", "t3code", "Me Dev", gittest.Message} {
+		if strings.Contains(out.String(), leak) {
+			t.Errorf("doctor output contains %q:\n%s", leak, out.String())
+		}
+	}
+	if !strings.Contains(out.String(), "fix: gbridge add email old@laptop.example") {
+		t.Errorf("doctor output lacks the fix line:\n%s", out.String())
+	}
+}
+
+// A commit made under the user's name with a coworker's email (a shared
+// machine, a pairing setup) must not lead to adding that email: every commit
+// the coworker made under it would then be mirrored as the user's.
+func TestDoctorNeverSuggestsSharedEmail(t *testing.T) {
+	gittest.Need(t)
+	isolateGitConfig(t, "")
+	repo := filepath.Join(t.TempDir(), "work")
+	gittest.Init(t, repo)
+	recent := func(days int) string { return time.Now().AddDate(0, 0, -days).Format(time.RFC3339) }
+
+	gittest.CommitAs(t, repo, "Me Dev", "me@work.example", recent(30))
+	gittest.CommitAs(t, repo, "Me Dev", "pair@work.example", recent(20))
+	gittest.CommitAs(t, repo, "Pair Partner", "pair@work.example", recent(15))
+	gittest.CommitAs(t, repo, "Pair Partner", "pair@work.example", recent(10))
+
+	doctorHome(t, homeFull, func(c *config.Config) { c.Repos = []string{repo} })
+	var got []result
+	for _, r := range diagnose(healthyGitHub()) {
+		if r.check == "emails" {
+			got = append(got, r)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("emails results = %+v, want exactly one", got)
+	}
+	r := got[0]
+	if r.status != statusOK || r.fix != "" {
+		t.Errorf("result = %+v, want ok with no fix: nothing safe to add", r)
+	}
+	for _, want := range []string{"1 commit", "pair@work.example", "2 commits under other author names"} {
+		if !strings.Contains(r.msg, want) {
+			t.Errorf("msg = %q, want it to contain %q", r.msg, want)
+		}
+	}
+
+	var out bytes.Buffer
+	Doctor(&out, healthyGitHub())
+	for _, leak := range []string{"gbridge add email pair@work.example", "Pair Partner"} {
+		if strings.Contains(out.String(), leak) {
+			t.Errorf("doctor output contains %q:\n%s", leak, out.String())
+		}
 	}
 }
 
