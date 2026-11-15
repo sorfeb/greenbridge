@@ -1,11 +1,15 @@
 package app
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/sorfeb/greenbridge/internal/config"
 	"github.com/sorfeb/greenbridge/internal/ghx"
@@ -91,7 +95,18 @@ type repoFacts struct {
 	missing   bool
 	notGit    bool
 	hasGitHub bool
+
+	// authors made commits in the last year on the refs sync reads. userName
+	// is git's user.name in the repo, empty when unset.
+	authors  []source.Author
+	userName string
 }
+
+// emailWindow is how far back doctor looks for commits under unlisted
+// emails: the year the contribution graph shows.
+const emailWindow = "the last year"
+
+func emailSince() time.Time { return time.Now().AddDate(-1, 0, 0) }
 
 func gather(gh ghx.GitHub) *facts {
 	f := &facts{}
@@ -112,6 +127,10 @@ func gather(gh ghx.GitHub) *facts {
 			rf.notGit = true
 		} else {
 			rf.hasGitHub = hasGitHub
+			if !hasGitHub || f.cfg.IncludeGitHubRepos {
+				rf.authors, _ = source.Authors(repo, emailSince())
+				rf.userName, _ = gitx.Git(repo, "config", "user.name")
+			}
 		}
 		f.repos = append(f.repos, rf)
 	}
@@ -141,6 +160,7 @@ func diagnose(gh ghx.GitHub) []result {
 	f := gather(gh)
 	rs := []result{checkGit(f), checkConfig(f), checkSecret(f)}
 	rs = append(rs, checkRepos(f)...)
+	rs = append(rs, checkEmails(f)...)
 	return append(rs,
 		checkGH(f),
 		checkAuthorEmail(f),
@@ -207,6 +227,71 @@ func checkRepos(f *facts) []result {
 		}
 	}
 	return rs
+}
+
+// checkEmails warns about commits under an email missing from config. In a
+// shared repo most unlisted authors are coworkers, so only commits under the
+// user's own author name count: a name on commits by a configured email, or
+// git's user.name. An email that also carries other names is reported but
+// never suggested. Only the email and counts are printed.
+func checkEmails(f *facts) []result {
+	const check = "emails"
+	if f.cfgErr != nil {
+		return []result{skipped(check, "config")}
+	}
+	listed := map[string]bool{}
+	for _, e := range f.cfg.Emails {
+		listed[strings.ToLower(strings.TrimSpace(e))] = true
+	}
+	names := map[string]bool{}
+	for _, r := range f.repos {
+		if n := strings.ToLower(strings.TrimSpace(r.userName)); n != "" {
+			names[n] = true
+		}
+		for _, a := range r.authors {
+			if listed[a.Email] && a.Name != "" {
+				names[strings.ToLower(a.Name)] = true
+			}
+		}
+	}
+	// others counts commits under other names on the same unlisted email: a
+	// coworker's address the user once committed with. Adding it would mirror
+	// the coworker's work as the user's, so such an email gets no fix.
+	counts, others := map[string]int{}, map[string]int{}
+	for _, r := range f.repos {
+		for _, a := range r.authors {
+			switch {
+			case listed[a.Email]:
+			case names[strings.ToLower(a.Name)]:
+				counts[a.Email] += a.Commits
+			default:
+				others[a.Email] += a.Commits
+			}
+		}
+	}
+	if len(counts) == 0 {
+		return []result{ok(check, "no commits in "+emailWindow+" under your author name and an unlisted email")}
+	}
+	emails := slices.Collect(maps.Keys(counts))
+	slices.SortFunc(emails, func(a, b string) int { return cmp.Or(counts[b]-counts[a], strings.Compare(a, b)) })
+	rs := make([]result, 0, len(emails))
+	for _, e := range emails {
+		mine := fmt.Sprintf("%s in %s under your author name use %s", plural(counts[e], "commit"), emailWindow, e)
+		if others[e] > 0 {
+			rs = append(rs, ok(check, fmt.Sprintf("%s, which also has %s under other author names: left out",
+				mine, plural(others[e], "commit"))))
+			continue
+		}
+		rs = append(rs, result{check, statusWarn, mine + ", which is not in config emails", "gbridge add email " + e})
+	}
+	return rs
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func checkGH(f *facts) result {
@@ -305,6 +390,10 @@ func Doctor(w io.Writer, gh ghx.GitHub) int {
 		case statusFail:
 			fails++
 			fmt.Fprintf(w, "             fix: %s\n", r.fix)
+		case statusWarn:
+			if r.fix != "" {
+				fmt.Fprintf(w, "             fix: %s\n", r.fix)
+			}
 		case statusUnverified:
 			fmt.Fprintf(w, "             check: %s\n", r.fix)
 		}
