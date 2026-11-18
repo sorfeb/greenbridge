@@ -1,0 +1,6 @@
+Usage:
+  gbridge remove email <address>...  stop matching work emails
+  gbridge remove repo <path>...      stop reading source repos
+  gbridge remove scan <folder>...    stop searching scan folders
+
+Commits already mirrored stay in the mirror repo.
