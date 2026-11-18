@@ -26,19 +26,19 @@ type compFlag struct {
 type compCommand struct {
 	Name, Summary string
 	Flags         []compFlag
+	Words         string // values of the first argument, space separated
 }
 
 type compData struct {
 	Commands []compCommand
 	Names    string // every command, space separated
-	Shells   string
 }
 
 func completionData() compData {
-	d := compData{Shells: strings.Join(shells, " ")}
+	var d compData
 	var names []string
 	for _, c := range commands {
-		cc := compCommand{Name: c.name, Summary: c.summary}
+		cc := compCommand{Name: c.name, Summary: c.summary, Words: strings.Join(c.words, " ")}
 		if c.flags != nil {
 			c.flags().VisitAll(func(f *flag.Flag) {
 				b, isBool := f.Value.(interface{ IsBoolFlag() bool })
