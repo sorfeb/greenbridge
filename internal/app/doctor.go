@@ -122,7 +122,7 @@ func gatherRepos(cfg *config.Config) []repoFacts {
 		}
 		present, at = append(present, sourceRepo{path: repo}), append(at, i)
 	}
-	for j, in := range inspectAll(cfg, present, emailSince()) {
+	for j, in := range inspectAll(cfg, present, emailSince(), false) {
 		rf := &rfs[at[j]]
 		rf.notGit, rf.hasGitHub, rf.authors = in.unreadable, in.gitHub, in.authors
 		if !in.unreadable && !in.hosted {

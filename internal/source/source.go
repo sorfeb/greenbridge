@@ -34,26 +34,65 @@ func (e unreadableError) Error() string        { return e.err.Error() }
 func (e unreadableError) Unwrap() error        { return e.err }
 func (e unreadableError) Is(target error) bool { return target == ErrUnreadable }
 
+// InspectOptions controls Inspect.
+type InspectOptions struct {
+	// SkipGitHub leaves a repo with a github.com remote unread, so it costs
+	// one git run: GitHub already counts it.
+	SkipGitHub bool
+	// Fetch runs git fetch on the repo's remotes before reading it.
+	Fetch bool
+}
+
 // Inspection is what one source repo holds.
 type Inspection struct {
 	GitHubRemote bool     // a remote points at github.com
-	History      *History // nil when the repo has a github.com remote and the caller skips those
+	FetchErr     error    // asked to fetch and it failed; History is what the repo already had
+	History      *History // nil when the repo has a github.com remote and SkipGitHub is set
 }
 
-// Inspect checks repo's remotes, then reads its history in one git log. With
-// skipGitHub, a repo with a github.com remote costs one git run instead of
-// two: GitHub already counts it.
-func Inspect(repo string, skipGitHub bool) (Inspection, error) {
+// Inspect checks repo's remotes, fetches when asked, then reads its history
+// in one git log. A failed fetch is recorded in FetchErr, not returned.
+func Inspect(repo string, opt InspectOptions) (Inspection, error) {
 	gh, err := hasGitHubRemote(repo)
 	if err != nil {
 		return Inspection{}, unreadableError{err}
 	}
 	in := Inspection{GitHubRemote: gh}
-	if gh && skipGitHub {
+	if gh && opt.SkipGitHub {
 		return in, nil
+	}
+	if opt.Fetch {
+		in.FetchErr = fetch(repo)
 	}
 	in.History, err = readHistory(repo)
 	return in, err
+}
+
+// fetch runs git fetch on every remote of repo. It never prunes, so commits
+// on branches deleted upstream stay readable, and git never prompts for
+// credentials: a remote that needs them fails instead of stalling a run that
+// fetches many repos at once. The error is git's own reason, on one line.
+func fetch(repo string) error {
+	env := []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"}
+	if _, err := gitx.Run(repo, env, nil, "fetch", "--all", "--no-prune", "--quiet"); err != nil {
+		return errors.New(gitReason(err))
+	}
+	return nil
+}
+
+// gitReason returns the first "fatal:" or "error:" line of a git error, else
+// its first line.
+func gitReason(err error) string {
+	msg := err.Error()
+	for line := range strings.SplitSeq(msg, "\n") {
+		for _, p := range []string{"fatal: ", "error: "} {
+			if _, reason, ok := strings.Cut(line, p); ok {
+				return strings.TrimSpace(reason)
+			}
+		}
+	}
+	first, _, _ := strings.Cut(msg, "\n")
+	return first
 }
 
 // History is every commit on a repo's branches, remote-tracking branches and
