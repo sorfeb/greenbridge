@@ -127,6 +127,15 @@ Each release ships `checksums.txt`, an SBOM per archive, and a GitHub build prov
 gh attestation verify gbridge_<version>_linux_amd64.tar.gz --repo sorfeb/greenbridge
 ```
 
+### First run on macOS and Windows
+
+Release binaries aren't signed or notarized yet, so your OS warns once. Verify the download first (above), then:
+
+- **macOS** says `gbridge` is damaged or can't be opened. Remove the quarantine flag in the folder that holds it: `xattr -d com.apple.quarantine gbridge`. Or open **System Settings > Privacy & Security** and choose **Open Anyway**.
+- **Windows** SmartScreen shows "Windows protected your PC". Choose **More info**, then **Run anyway**.
+
+`go install` and `mise` builds don't show these prompts.
+
 ## Usage
 
 ```sh
