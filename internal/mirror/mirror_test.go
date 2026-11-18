@@ -12,8 +12,8 @@ func TestParseSubject(t *testing.T) {
 		"  gb/1   abcdef012345  \r": "abcdef012345",
 	}
 	for in, want := range cases {
-		if got := ParseSubject(in); got != want {
-			t.Errorf("ParseSubject(%q) = %q, want %q", in, got, want)
+		if got := parseSubject(in); got != want {
+			t.Errorf("parseSubject(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
