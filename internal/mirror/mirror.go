@@ -1,10 +1,13 @@
-// Package mirror writes mirror commits to the mirror clone and pushes them to
-// the mirror repo. It keeps no state file: the ledger is read back from
-// mirror commit subjects ("gb/1 <id>").
+// Package mirror owns the append-and-publish protocol: open the mirror clone
+// and read its ledger, then append one mirror commit per missing entry and
+// push, retrying when another machine pushed first. It keeps no state file:
+// the ledger is read back from mirror commit subjects ("gb/1 <id>"), a
+// format private to this package.
 package mirror
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -56,9 +59,135 @@ func (m Clone) Ensure() error {
 	return nil
 }
 
-// Fetch returns the current tip of the mirror branch, fetching from origin
+// Ledger is the set of mirror IDs in the mirror repo, read at one tip.
+type Ledger struct {
+	IDs      map[string]bool
+	FetchErr error // fetch failed: IDs are from the last successful fetch
+
+	tip string // mirror commit new entries build on; empty for none
+}
+
+// Open ensures the mirror clone exists, fetches the mirror repo, and reads
+// the ledger. A failed fetch is recorded in FetchErr, not returned: a preview
+// still works offline, and Publish refuses to write from it.
+func (m Clone) Open() (*Ledger, error) {
+	if err := m.Ensure(); err != nil {
+		return nil, err
+	}
+	l := &Ledger{}
+	return l, m.read(l)
+}
+
+// read refills l from the mirror repo's current tip, falling back to the
+// last fetched tip when the fetch fails.
+func (m Clone) read(l *Ledger) error {
+	tip, err := m.fetch()
+	l.FetchErr = err
+	if err != nil {
+		tip = m.last()
+	}
+	ids, err := m.ids(tip)
+	if err != nil {
+		return err
+	}
+	l.IDs, l.tip = ids, tip
+	return nil
+}
+
+// Missing returns the entries whose mirror IDs are not in the ledger, in
+// their order.
+func (l *Ledger) Missing(desired []Entry) []Entry {
+	var out []Entry
+	for _, e := range desired {
+		if !l.IDs[e.ID] {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// Orphans counts the mirror IDs in the ledger that no desired entry
+// produces: work from another machine sharing the mirror repo, from a source
+// repo or email no longer configured, or history rewritten in sha identity
+// mode. Publish never removes them.
+func (l *Ledger) Orphans(desired []Entry) int {
+	want := make(map[string]bool, len(desired))
+	for _, e := range desired {
+		want[e.ID] = true
+	}
+	n := 0
+	for id := range l.IDs {
+		if !want[id] {
+			n++
+		}
+	}
+	return n
+}
+
+// PublishOptions controls how Publish writes.
+type PublishOptions struct {
+	DryRun bool // compute only, write nothing
+	NoPush bool // write the mirror clone, skip the push
+}
+
+// Published reports what Publish did.
+type Published struct {
+	Ledger int  // mirror IDs already in the mirror repo
+	Added  int  // mirror commits written, or that a dry run would write
+	Pushed bool // the mirror repo has them
+}
+
+// attempts is how many times Publish tries to push before giving up.
+const attempts = 3
+
+// Publish appends one mirror commit per desired entry missing from l, on top
+// of the tip l was read at, and pushes it. It refuses to write after a
+// failed fetch: entries built on a stale tip either duplicate what another
+// machine pushed or get rejected. A rejected push is never forced: Publish
+// refetches into l, recomputes what is missing, and tries again. On success
+// l holds every published ID. log receives one line per rejected push and
+// may be nil.
+func (m Clone) Publish(l *Ledger, desired []Entry, a Author, opt PublishOptions, log io.Writer) (Published, error) {
+	if log == nil {
+		log = io.Discard
+	}
+	for attempt := range attempts {
+		if attempt > 0 {
+			if err := m.read(l); err != nil {
+				return Published{}, err
+			}
+		}
+		if l.FetchErr != nil {
+			return Published{}, fmt.Errorf("mirror fetch failed, nothing written: %w", l.FetchErr)
+		}
+		missing := l.Missing(desired)
+		res := Published{Ledger: len(l.IDs), Added: len(missing)}
+		if len(missing) == 0 || opt.DryRun {
+			return res, nil
+		}
+		tip, err := m.emit(l.tip, missing, a)
+		if err != nil {
+			return Published{}, err
+		}
+		if m.Remote != "" && !opt.NoPush {
+			if err := m.push(); err != nil {
+				fmt.Fprintf(log, "push rejected, refetching (attempt %d): %v\n", attempt+1, err)
+				continue
+			}
+			res.Pushed = true
+		}
+		for _, e := range missing {
+			l.IDs[e.ID] = true
+		}
+		l.tip = tip
+		return res, nil
+	}
+	return Published{}, fmt.Errorf("push kept failing after %d attempts; run gbridge doctor", attempts)
+}
+
+// fetch returns the current tip of the mirror branch, fetching from origin
 // when there is a remote. An empty string means the branch has no commits.
-func (m Clone) Fetch() (string, error) {
+func (m Clone) fetch() (string, error) {
 	if m.Remote == "" {
 		return m.rev("refs/heads/" + m.Branch), nil
 	}
@@ -76,17 +205,17 @@ func (m Clone) Fetch() (string, error) {
 	return m.rev(tracking), nil
 }
 
-// Last returns the tip from the most recent successful Fetch without
+// last returns the tip from the most recent successful fetch without
 // contacting origin. An empty string means none is known.
-func (m Clone) Last() string {
+func (m Clone) last() string {
 	if m.Remote == "" {
 		return m.rev("refs/heads/" + m.Branch)
 	}
 	return m.rev("refs/remotes/origin/" + m.Branch)
 }
 
-// Ledger returns the mirror IDs already present at tip.
-func (m Clone) Ledger(tip string) (map[string]bool, error) {
+// ids returns the mirror IDs already present at tip.
+func (m Clone) ids(tip string) (map[string]bool, error) {
 	ids := map[string]bool{}
 	if tip == "" {
 		return ids, nil
@@ -96,16 +225,16 @@ func (m Clone) Ledger(tip string) (map[string]bool, error) {
 		return nil, err
 	}
 	for s := range strings.SplitSeq(out, "\n") {
-		if id := ParseSubject(s); id != "" {
+		if id := parseSubject(s); id != "" {
 			ids[id] = true
 		}
 	}
 	return ids, nil
 }
 
-// ParseSubject extracts the ID from "gb/<version> [fields...] <id>".
+// parseSubject extracts the ID from "gb/<version> [fields...] <id>".
 // Unknown future versions are accepted; non-gb commits return "".
-func ParseSubject(s string) string {
+func parseSubject(s string) string {
 	f := strings.Fields(s)
 	if len(f) < 2 || !strings.HasPrefix(f[0], "gb/") {
 		return ""
@@ -116,10 +245,10 @@ func ParseSubject(s string) string {
 	return f[len(f)-1]
 }
 
-// Emit writes one empty commit per entry on top of tip and moves the local
-// branch there. Any unpushed local commits are discarded: they are derived
+// emit writes one empty mirror commit per entry on top of tip and moves the
+// local branch there. Any unpushed local commits are discarded: they are derived
 // data and get recomputed.
-func (m Clone) Emit(tip string, entries []Entry, a Author) (string, error) {
+func (m Clone) emit(tip string, entries []Entry, a Author) (string, error) {
 	ref := "refs/heads/" + m.Branch
 	if tip != "" {
 		if _, err := gitx.Git(m.Path, "update-ref", ref, tip); err != nil {
@@ -147,25 +276,12 @@ func (m Clone) Emit(tip string, entries []Entry, a Author) (string, error) {
 	return m.rev(ref), nil
 }
 
-// Push sends the local branch to origin. It fails without forcing if the
-// remote moved; the caller refetches and retries.
-func (m Clone) Push() error {
+// push sends the local branch to origin. It fails without forcing if the
+// remote moved.
+func (m Clone) push() error {
 	ref := "refs/heads/" + m.Branch
 	_, err := gitx.Git(m.Path, "push", "-q", "origin", ref+":"+ref)
 	return err
-}
-
-// Count returns the number of commits reachable from tip.
-func (m Clone) Count(tip string) int {
-	if tip == "" {
-		return 0
-	}
-	out, err := gitx.Git(m.Path, "rev-list", "--count", tip)
-	if err != nil {
-		return 0
-	}
-	n, _ := strconv.Atoi(out)
-	return n
 }
 
 func (m Clone) rev(ref string) string {

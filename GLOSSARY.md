@@ -39,7 +39,7 @@ The set of mirror IDs already in the mirror repo, read back from mirror commit s
 _Avoid_: state, history, already synced
 
 **Orphan**:
-A mirror ID in the ledger that no longer appears in desired. Sync never removes it.
+A mirror ID in the ledger that desired on this machine lacks: another machine's work, or work no longer configured. Sync never removes it.
 _Avoid_: stale ID, extra
 
 **Plan**:
