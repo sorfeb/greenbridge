@@ -8,10 +8,10 @@ import (
 	"github.com/sorfeb/greenbridge/internal/gittest"
 )
 
-// Authors walks the same refs as Scan. Editor checkpoint refs such as
+// Authors walks the same refs as Read. Editor checkpoint refs such as
 // refs/t3/* hold thousands of commits under the tool's own identity; counting
 // them would flag the tool's email as one of the user's.
-func TestAuthorsReadsScanRefsOnly(t *testing.T) {
+func TestAuthorsWalksReadRefsOnly(t *testing.T) {
 	gittest.Need(t)
 	repo := t.TempDir()
 	gittest.Init(t, repo)
@@ -35,12 +35,12 @@ func TestAuthorsReadsScanRefsOnly(t *testing.T) {
 		t.Errorf("Authors() = %+v, want %+v", got, want)
 	}
 
-	// Scan agrees on which commits exist: the checkpoint is invisible to both.
-	acts, err := Scan(repo, []string{"t3code@users.noreply.github.com", "old@laptop.example"}, time.Time{})
+	// Read agrees on which commits exist: the checkpoint is invisible to both.
+	acts, err := Read(repo, []string{"t3code@users.noreply.github.com", "old@laptop.example"}, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(acts) != 1 || acts[0].Email != "old@laptop.example" {
-		t.Errorf("Scan() = %+v, want only the remote-tracking commit", acts)
+		t.Errorf("Read() = %+v, want only the remote-tracking commit", acts)
 	}
 }

@@ -32,13 +32,13 @@ func mirrored(t *testing.T, tmp string) *config.Config {
 		Version: 1,
 		Emails:  []string{"me@work.com", "alt@work.local"},
 		Repos:   []string{filepath.Join(tmp, "src")},
-		Mirror: config.Mirror{
+		Mirror: config.MirrorSettings{
 			Remote: filepath.Join(tmp, "remote.git"), Path: filepath.Join(tmp, "mirror.git"),
 			Branch: "main", Visibility: "private",
 		},
-		Author:     config.Author{Name: "me", Email: "1+me@users.noreply.github.com"},
-		TimePolicy: ident.PolicyExact,
-		Identity:   ident.ModeAuthorDate,
+		MirrorAuthor: config.MirrorAuthor{Name: "me", Email: "1+me@users.noreply.github.com"},
+		TimePolicy:   ident.PolicyExact,
+		Identity:     ident.ModeAuthorDate,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
