@@ -155,19 +155,6 @@ func (m Clone) Push() error {
 	return err
 }
 
-// Count returns the number of commits reachable from tip.
-func (m Clone) Count(tip string) int {
-	if tip == "" {
-		return 0
-	}
-	out, err := gitx.Git(m.Path, "rev-list", "--count", tip)
-	if err != nil {
-		return 0
-	}
-	n, _ := strconv.Atoi(out)
-	return n
-}
-
 func (m Clone) rev(ref string) string {
 	out, err := gitx.Git(m.Path, "rev-parse", "-q", "--verify", ref+"^{commit}")
 	if err != nil {
