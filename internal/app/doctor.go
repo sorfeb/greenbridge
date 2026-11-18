@@ -2,6 +2,7 @@ package app
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sorfeb/greenbridge/internal/config"
@@ -100,7 +102,19 @@ type repoFacts struct {
 	// is git's user.name in the repo, empty when unset.
 	authors  []source.Author
 	userName string
+
+	// remotes compares origin and tracked remotes with the repo. Only for
+	// repos sync reads.
+	remotes []source.Remote
 }
+
+// remoteTimeout bounds how long doctor waits for every remote together,
+// counted from the start. A remote that answers later is reported as not
+// checked: a slow forge is not a broken remote.
+const remoteTimeout = 15 * time.Second
+
+// remoteWorkers is how many repos list their remotes at once.
+const remoteWorkers = 8
 
 // emailWindow is how far back doctor looks for commits under unlisted
 // emails: the year the contribution graph shows.
@@ -115,11 +129,23 @@ func gather(gh ghx.GitHub) *facts {
 	f.cfg, f.cfgErr = config.Load()
 	f.secretPath, _ = config.SecretPath()
 	_, f.secretErr = ident.Load(f.secretPath)
-	f.account, f.accountErr = gh.Account()
 	if f.cfgErr != nil {
+		f.account, f.accountErr = gh.Account()
 		return f
 	}
-	for _, repo := range f.cfg.Repos {
+	// Remotes are listed in the background while the local checks run.
+	ctx, cancel := context.WithTimeout(context.Background(), remoteTimeout)
+	remotes := make([][]source.Remote, len(f.cfg.Repos))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, remoteWorkers)
+	defer func() {
+		wg.Wait()
+		cancel()
+		for i := range f.repos {
+			f.repos[i].remotes = remotes[i]
+		}
+	}()
+	for i, repo := range f.cfg.Repos {
 		rf := repoFacts{path: repo}
 		if _, err := os.Stat(repo); err != nil {
 			rf.missing = true
@@ -128,6 +154,7 @@ func gather(gh ghx.GitHub) *facts {
 		} else {
 			rf.hasGitHub = hasGitHub
 			if !hasGitHub || f.cfg.IncludeGitHubRepos {
+				wg.Go(func() { remotes[i] = listRemotes(ctx, repo, sem) })
 				rf.authors, _ = source.Authors(repo, emailSince())
 				rf.userName, _ = gitx.Git(repo, "config", "user.name")
 			}
@@ -143,6 +170,7 @@ func gather(gh ghx.GitHub) *facts {
 		}
 		f.scans = append(f.scans, sf)
 	}
+	f.account, f.accountErr = gh.Account()
 	if f.accountErr != nil {
 		return f
 	}
@@ -155,12 +183,23 @@ func gather(gh ghx.GitHub) *facts {
 	return f
 }
 
+// listRemotes compares repo's tracked remotes with the repo once a slot in
+// sem is free. A remote still unlisted when ctx ends carries its error.
+func listRemotes(ctx context.Context, repo string, sem chan struct{}) []source.Remote {
+	sem <- struct{}{}
+	defer func() { <-sem }()
+	// A repo git can't read was already judged by checkRepos.
+	rs, _ := source.CheckRemotes(ctx, repo)
+	return rs
+}
+
 // diagnose runs every check. Each reports, even when it cannot run.
 func diagnose(gh ghx.GitHub) []result {
 	f := gather(gh)
 	rs := []result{checkGit(f), checkConfig(f), checkSecret(f)}
 	rs = append(rs, checkRepos(f)...)
 	rs = append(rs, checkEmails(f)...)
+	rs = append(rs, checkRemotes(f)...)
 	return append(rs,
 		checkGH(f),
 		checkAuthorEmail(f),
@@ -285,6 +324,64 @@ func checkEmails(f *facts) []result {
 		rs = append(rs, result{check, statusWarn, mine + ", which is not in config emails", "gbridge add email " + e})
 	}
 	return rs
+}
+
+// checkRemotes warns about tracked remotes holding commits the repo lacks,
+// and about remotes git can't reach. A remote with nothing new is fine
+// however long ago the repo fetched it. Remotes too slow to answer share
+// one line: a slow forge is not a broken remote.
+func checkRemotes(f *facts) []result {
+	const check = "remotes"
+	if f.cfgErr != nil {
+		return []result{skipped(check, "config")}
+	}
+	var rs []result
+	current, slow := 0, 0
+	for _, r := range f.repos {
+		p := shellPath(r.path)
+		for _, rem := range r.remotes {
+			switch {
+			case errors.Is(rem.Err, context.DeadlineExceeded):
+				slow++
+			case rem.Err != nil:
+				rs = append(rs, result{
+					check, statusWarn, "can't reach " + rem.Name + ": " + r.path,
+					"git -C " + p + " remote remove " + rem.Name + ", or fix its URL: git -C " + p + " remote set-url " + rem.Name + " <url>",
+				})
+			case rem.Unfetched > 0:
+				what := fmt.Sprintf("%d branches on %s have", rem.Unfetched, rem.Name)
+				if rem.Unfetched == 1 {
+					what = "1 branch on " + rem.Name + " has"
+				}
+				rs = append(rs, result{
+					check, statusWarn, what + " commits you haven't fetched: " + r.path,
+					"git -C " + p + " fetch " + rem.Name,
+				})
+			default:
+				current++
+			}
+		}
+	}
+	switch {
+	case current > 0:
+		rs = append(rs, ok(check, plural(current, "tracked remote")+" checked, nothing left to fetch"))
+	case len(rs) == 0 && slow == 0:
+		rs = append(rs, ok(check, "no source repo tracks a remote"))
+	}
+	if slow > 0 {
+		rs = append(rs, unverified(check,
+			fmt.Sprintf("%s gave no answer within %s, not checked", plural(slow, "tracked remote"), remoteTimeout),
+			"run gbridge doctor again, or git fetch in those repos"))
+	}
+	return rs
+}
+
+// shellPath quotes p for a fix line when it holds a space.
+func shellPath(p string) string {
+	if strings.ContainsAny(p, " \t") {
+		return `"` + p + `"`
+	}
+	return p
 }
 
 func plural(n int, noun string) string {

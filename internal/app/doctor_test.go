@@ -2,9 +2,12 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +16,7 @@ import (
 	"github.com/sorfeb/greenbridge/internal/ghx"
 	"github.com/sorfeb/greenbridge/internal/gittest"
 	"github.com/sorfeb/greenbridge/internal/ident"
+	"github.com/sorfeb/greenbridge/internal/source"
 )
 
 const (
@@ -79,8 +83,8 @@ func TestDiagnose(t *testing.T) {
 		{
 			name: "healthy",
 			want: map[string]status{
-				"config": statusOK, "secret": statusOK, "emails": statusOK, "gh": statusOK, "author email": statusOK,
-				"mirror": statusOK, "mirror branch": statusOK, "private contributions": statusUnverified,
+				"config": statusOK, "secret": statusOK, "emails": statusOK, "remotes": statusOK, "gh": statusOK,
+				"author email": statusOK, "mirror": statusOK, "mirror branch": statusOK, "private contributions": statusUnverified,
 			},
 		},
 		{
@@ -171,7 +175,8 @@ func TestDiagnose(t *testing.T) {
 			name: "no config",
 			home: homeEmpty,
 			want: map[string]status{
-				"config": statusFail, "secret": statusFail, "repos": statusSkipped, "emails": statusSkipped, "gh": statusOK,
+				"config": statusFail, "secret": statusFail, "repos": statusSkipped, "emails": statusSkipped,
+				"remotes": statusSkipped, "gh": statusOK,
 				"author email": statusSkipped, "mirror": statusSkipped, "mirror branch": statusSkipped,
 			},
 		},
@@ -337,6 +342,65 @@ func TestDoctorNeverSuggestsSharedEmail(t *testing.T) {
 		if strings.Contains(out.String(), leak) {
 			t.Errorf("doctor output contains %q:\n%s", leak, out.String())
 		}
+	}
+}
+
+// Commits on a remote reach sync only through git fetch. Doctor compares
+// each tracked remote with the clone and names the fetch, or the broken
+// remote, to fix. How long ago the clone fetched does not matter.
+func TestDoctorChecksRemotes(t *testing.T) {
+	gittest.Need(t)
+	isolateGitConfig(t, "")
+	dir := t.TempDir()
+	up, behind, current := filepath.Join(dir, "up"), filepath.Join(dir, "behind"), filepath.Join(dir, "current")
+	gittest.Init(t, up)
+	gittest.Commit(t, up, "me@work.example", "2025-03-01T10:00:00Z")
+	gittest.Git(t, "", nil, "clone", "-q", up, behind)
+	gittest.Git(t, "", nil, "clone", "-q", up, current)
+	gittest.Commit(t, up, "me@work.example", "2025-03-02T10:00:00Z")
+	gittest.Git(t, current, nil, "fetch", "-q")
+	gone := filepath.Join(dir, "gone")
+	gittest.Git(t, current, nil, "remote", "add", "dev-vm", gone)
+	gittest.Git(t, current, nil, "config", "branch.main.remote", "dev-vm")
+	gittest.Git(t, behind, nil, "remote", "add", "leftover", gone)
+	doctorHome(t, homeFull, func(c *config.Config) { c.Repos = []string{behind, current} })
+
+	var got []result
+	for _, r := range diagnose(healthyGitHub()) {
+		if r.check == "remotes" {
+			got = append(got, r)
+		}
+	}
+	want := []result{
+		{"remotes", statusWarn, "1 branch on origin has commits you haven't fetched: " + behind, "git -C " + behind + " fetch origin"},
+		{"remotes", statusWarn, "can't reach dev-vm: " + current, "git -C " + current + " remote remove dev-vm, or fix its URL: git -C " + current + " remote set-url dev-vm <url>"},
+		{"remotes", statusOK, "1 tracked remote checked, nothing left to fetch", ""},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("remotes results:\n got  %+v\n want %+v", got, want)
+	}
+
+	var out bytes.Buffer
+	Doctor(&out, healthyGitHub())
+	if !strings.Contains(out.String(), "fix: git -C "+behind+" fetch origin") {
+		t.Errorf("doctor output lacks the fix line:\n%s", out.String())
+	}
+}
+
+// A forge that answers after the deadline is slow, not broken: its remotes
+// share one unverified line and never a fix that removes them.
+func TestCheckRemotesSlow(t *testing.T) {
+	late := fmt.Errorf("listing origin: %w", context.DeadlineExceeded)
+	f := &facts{cfg: &config.Config{}, repos: []repoFacts{
+		{path: "a", remotes: []source.Remote{{Name: "origin", Err: late}, {Name: "vm"}}},
+		{path: "b", remotes: []source.Remote{{Name: "origin", Err: late}}},
+	}}
+	want := []result{
+		{"remotes", statusOK, "1 tracked remote checked, nothing left to fetch", ""},
+		{"remotes", statusUnverified, "2 tracked remotes gave no answer within 15s, not checked", "run gbridge doctor again, or git fetch in those repos"},
+	}
+	if got := checkRemotes(f); !slices.Equal(got, want) {
+		t.Errorf("checkRemotes:\n got  %+v\n want %+v", got, want)
 	}
 }
 
