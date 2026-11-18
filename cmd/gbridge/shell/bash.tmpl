@@ -8,10 +8,11 @@ _gbridge() {
         return
     fi
     case ${COMP_WORDS[1]} in
-    completion)
-        [[ $COMP_CWORD -eq 2 ]] && COMPREPLY=($(compgen -W '{{.Shells}}' -- "$cur"))
+{{- range .Commands}}{{if .Words}}
+    {{.Name}})
+        [[ $COMP_CWORD -eq 2 ]] && COMPREPLY=($(compgen -W '{{.Words}}' -- "$cur"))
         ;;
-{{- range .Commands}}{{if .Flags}}
+{{- else if .Flags}}
     {{.Name}})
         case $prev in
 {{- with pattern .Flags true}}

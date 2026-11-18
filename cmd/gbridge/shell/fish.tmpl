@@ -5,7 +5,9 @@ complete -c gbridge -f
 {{- range .Commands}}
 complete -c gbridge -n 'not __fish_seen_subcommand_from {{$.Names}}' -a {{.Name}} -d '{{fq .Summary}}'
 {{- end}}
-complete -c gbridge -n '__fish_seen_subcommand_from completion' -a '{{.Shells}}'
+{{- range .Commands}}{{if .Words}}
+complete -c gbridge -n '__fish_seen_subcommand_from {{.Name}}; and not __fish_seen_subcommand_from {{.Words}}' -a '{{.Words}}'
+{{- end}}{{end}}
 {{- range $c := .Commands}}{{range $c.Flags}}
 complete -c gbridge -n '__fish_seen_subcommand_from {{$c.Name}}' -l {{.Name}}
 {{- if .Dir}} -x -a '(__fish_complete_directories)'{{else if .Value}} -x{{end}} -d '{{fq .Usage}}'
