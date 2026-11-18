@@ -263,6 +263,7 @@ func runSync(name string, args []string) error {
 		fmt.Printf(", pushed to %s", cfg.Mirror.Repo)
 	}
 	fmt.Println()
+	app.WriteOrphans(os.Stdout, res.Orphans)
 	return nil
 }
 
