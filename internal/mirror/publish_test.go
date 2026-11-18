@@ -249,3 +249,14 @@ func TestPublishCleansAuthor(t *testing.T) {
 		t.Errorf("author = %q", got)
 	}
 }
+
+// Orphans are mirror IDs no desired entry produces any more.
+func TestLedgerOrphans(t *testing.T) {
+	l := &Ledger{IDs: map[string]bool{e1.ID: true, e2.ID: true, e3.ID: true}}
+	if n := l.Orphans([]Entry{e1, e2, e3}); n != 0 {
+		t.Errorf("Orphans() with every ID desired = %d, want 0", n)
+	}
+	if n := l.Orphans([]Entry{e2, entry("bbbbbbbbbbb1", "2025-02-01T00:00:00Z")}); n != 2 {
+		t.Errorf("Orphans() = %d, want 2 (e1 and e3)", n)
+	}
+}
