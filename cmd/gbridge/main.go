@@ -6,8 +6,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -41,20 +43,99 @@ func buildVersion() string {
 type command struct {
 	name, summary string
 	flags         func() *flag.FlagSet
+	// words are the values the first argument takes, offered by completion.
+	words []string
+	// usage is the -h text of a command without flags: one line per form,
+	// then an optional note. Empty means the name and summary.
+	usage []usageLine
+	note  string
+}
+
+// usageLine is one form of a command in its -h text.
+type usageLine struct{ args, what string }
+
+// editKind is one thing add and remove change in the config.
+type editKind struct{ name, arg, add, remove string }
+
+var editKinds = []editKind{
+	{"email", "<address>...", "add work emails to match", "stop matching work emails"},
+	{"repo", "<path>...", "add source repos", "stop reading source repos"},
+	{"scan", "<folder>...", "add scan folders, searched for source repos on every plan and sync", "stop searching scan folders"},
+}
+
+func editWords() []string {
+	var w []string
+	for _, k := range editKinds {
+		w = append(w, k.name)
+	}
+	return w
+}
+
+func editUsage(remove bool) []usageLine {
+	var u []usageLine
+	for _, k := range editKinds {
+		what := k.add
+		if remove {
+			what = k.remove
+		}
+		u = append(u, usageLine{k.name + " " + k.arg, what})
+	}
+	return u
 }
 
 var commands = []command{
-	{"init", "set up emails, source repos, secret, and the mirror repo", func() *flag.FlagSet { return new(initFlags).set() }},
-	{"add", "add to the config: add email|repo|scan <value>...", nil},
-	{"remove", "remove from the config: remove email|repo|scan <value>...", nil},
-	{"config", "print the current setup", nil},
-	{"plan", "preview what would be mirrored (writes nothing)", func() *flag.FlagSet { return new(planFlags).set() }},
-	{"sync", "mirror new activity and push", func() *flag.FlagSet { return new(syncFlags).set("sync") }},
-	{"backfill", "alias for sync; use --since to limit history", func() *flag.FlagSet { return new(syncFlags).set("backfill") }},
-	{"doctor", "check every precondition for squares to appear", nil},
-	{"secret", "print the recovery phrase for other machines", nil},
-	{"completion", "print a shell completion script: " + strings.Join(shells, ", "), nil},
-	{"version", "print the version", nil},
+	{name: "init", summary: "set up emails, source repos, secret, and the mirror repo", flags: func() *flag.FlagSet { return new(initFlags).set() }},
+	{
+		name: "add", summary: "add to the config: add email|repo|scan <value>...",
+		words: editWords(), usage: editUsage(false),
+		note: "Changes only the config: the secret and the mirror repo stay as they are.",
+	},
+	{
+		name: "remove", summary: "remove from the config: remove email|repo|scan <value>...",
+		words: editWords(), usage: editUsage(true),
+		note: "Commits already mirrored stay in the mirror repo.",
+	},
+	{name: "config", summary: "print the current setup"},
+	{name: "plan", summary: "preview what would be mirrored (writes nothing)", flags: func() *flag.FlagSet { return new(planFlags).set() }},
+	{name: "sync", summary: "mirror new activity and push", flags: func() *flag.FlagSet { return new(syncFlags).set("sync") }},
+	{name: "backfill", summary: "alias for sync; use --since to limit history", flags: func() *flag.FlagSet { return new(syncFlags).set("backfill") }},
+	{name: "doctor", summary: "check every precondition for squares to appear"},
+	{name: "secret", summary: "print the recovery phrase for other machines"},
+	{
+		name: "completion", summary: "print a shell completion script: " + strings.Join(shells, ", "),
+		words: shells, usage: []usageLine{{"<shell>", "print the completion script for " + strings.Join(shells, ", ")}},
+	},
+	{name: "version", summary: "print the version"},
+}
+
+// printHelp writes the -h text of a command without flags and reports
+// whether args asked for it. Commands with flags get theirs from the flag
+// package. No email, path, or folder is spelled -h, so help wins anywhere in
+// args.
+func printHelp(w io.Writer, name string, args []string) bool {
+	i := slices.IndexFunc(commands, func(c command) bool { return c.name == name })
+	if i < 0 || commands[i].flags != nil || !slices.ContainsFunc(args, func(a string) bool {
+		return a == "-h" || a == "-help" || a == "--help"
+	}) {
+		return false
+	}
+	c := commands[i]
+	usage := c.usage
+	if usage == nil {
+		usage = []usageLine{{"", c.summary}}
+	}
+	width := 0
+	for _, u := range usage {
+		width = max(width, len(strings.TrimSpace(c.name+" "+u.args)))
+	}
+	fmt.Fprintln(w, "Usage:")
+	for _, u := range usage {
+		fmt.Fprintf(w, "  gbridge %-*s  %s\n", width, strings.TrimSpace(c.name+" "+u.args), u.what)
+	}
+	if c.note != "" {
+		fmt.Fprintf(w, "\n%s\n", c.note)
+	}
+	return true
 }
 
 func usage() string {
@@ -89,8 +170,12 @@ func main() {
 		fmt.Fprint(os.Stderr, usage())
 		os.Exit(2)
 	}
+	cmd, args := os.Args[1], os.Args[2:]
+	if printHelp(os.Stdout, cmd, args) {
+		return
+	}
 	var err error
-	switch cmd, args := os.Args[1], os.Args[2:]; cmd {
+	switch cmd {
 	case "init":
 		err = runInit(args)
 	case "add", "remove":
