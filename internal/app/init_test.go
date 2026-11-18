@@ -71,8 +71,8 @@ func TestInitCreatesMirrorOnGitHub(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Mirror.Repo != testMirror || cfg.Author.Email != testNoreply || cfg.Author.Name != testLogin {
-		t.Errorf("config mirror %q author %+v", cfg.Mirror.Repo, cfg.Author)
+	if cfg.Mirror.Repo != testMirror || cfg.MirrorAuthor.Email != testNoreply || cfg.MirrorAuthor.Name != testLogin {
+		t.Errorf("config mirror %q author %+v", cfg.Mirror.Repo, cfg.MirrorAuthor)
 	}
 }
 
@@ -109,8 +109,8 @@ func TestInitInteractive(t *testing.T) {
 	}
 	// The folder is kept, so later clones are found; what it holds now is
 	// recorded as seen, since init already showed it.
-	if !slices.Equal(cfg.Emails, []string{testWorkEmail}) || len(cfg.Repos) != 0 || !slices.Equal(cfg.Scan, []string{work}) {
-		t.Errorf("config emails %v repos %v scan %v, want [%s] [] [%s]", cfg.Emails, cfg.Repos, cfg.Scan, testWorkEmail, work)
+	if !slices.Equal(cfg.Emails, []string{testWorkEmail}) || len(cfg.Repos) != 0 || !slices.Equal(cfg.ScanFolders, []string{work}) {
+		t.Errorf("config emails %v repos %v scan %v, want [%s] [] [%s]", cfg.Emails, cfg.Repos, cfg.ScanFolders, testWorkEmail, work)
 	}
 	if seen, err := config.LoadSeen(); err != nil || len(seen) != 1 || !seen[mine] {
 		t.Errorf("seen = %v, %v; want %s only", seen, err, mine)
@@ -200,8 +200,8 @@ func TestInitImportsSecretForLocalMirror(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.Mirror.LocalOnly() || cfg.Mirror.Repo != "" || cfg.Author.Name != "greenbridge" {
-		t.Errorf("config mirror %+v author %+v, want local only by greenbridge", cfg.Mirror, cfg.Author)
+	if !cfg.Mirror.LocalOnly() || cfg.Mirror.Repo != "" || cfg.MirrorAuthor.Name != "greenbridge" {
+		t.Errorf("config mirror %+v author %+v, want local only by greenbridge", cfg.Mirror, cfg.MirrorAuthor)
 	}
 }
 

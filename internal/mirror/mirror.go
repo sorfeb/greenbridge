@@ -1,5 +1,6 @@
-// Package mirror manages the activity repo. It keeps no state file: the set
-// of synced IDs is read back from commit subjects ("gb/1 <id>").
+// Package mirror writes mirror commits to the mirror clone and pushes them to
+// the mirror repo. It keeps no state file: the ledger is read back from
+// mirror commit subjects ("gb/1 <id>").
 package mirror
 
 import (
@@ -13,27 +14,27 @@ import (
 	"github.com/sorfeb/greenbridge/internal/gitx"
 )
 
-// Mirror is a local bare clone of the activity repo.
-type Mirror struct {
+// Clone is the mirror clone: the local bare clone of the mirror repo.
+type Clone struct {
 	Path   string
 	Remote string // empty for local only
 	Branch string
 }
 
-// Entry is one commit to write.
+// Entry is one mirror ID and the time to write for it: one mirror commit.
 type Entry struct {
 	ID   string
 	Time time.Time
 }
 
-// Author is the identity on mirror commits.
+// Author is the mirror author, the identity on every mirror commit.
 type Author struct {
 	Name  string
 	Email string
 }
 
 // Ensure creates the bare clone if missing and points origin at Remote.
-func (m Mirror) Ensure() error {
+func (m Clone) Ensure() error {
 	if _, err := os.Stat(filepath.Join(m.Path, "HEAD")); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(m.Path), 0o700); err != nil {
 			return err
@@ -57,7 +58,7 @@ func (m Mirror) Ensure() error {
 
 // Fetch returns the current tip of the mirror branch, fetching from origin
 // when there is a remote. An empty string means the branch has no commits.
-func (m Mirror) Fetch() (string, error) {
+func (m Clone) Fetch() (string, error) {
 	if m.Remote == "" {
 		return m.rev("refs/heads/" + m.Branch), nil
 	}
@@ -77,15 +78,15 @@ func (m Mirror) Fetch() (string, error) {
 
 // Last returns the tip from the most recent successful Fetch without
 // contacting origin. An empty string means none is known.
-func (m Mirror) Last() string {
+func (m Clone) Last() string {
 	if m.Remote == "" {
 		return m.rev("refs/heads/" + m.Branch)
 	}
 	return m.rev("refs/remotes/origin/" + m.Branch)
 }
 
-// Ledger returns the IDs already present at tip.
-func (m Mirror) Ledger(tip string) (map[string]bool, error) {
+// Ledger returns the mirror IDs already present at tip.
+func (m Clone) Ledger(tip string) (map[string]bool, error) {
 	ids := map[string]bool{}
 	if tip == "" {
 		return ids, nil
@@ -118,7 +119,7 @@ func ParseSubject(s string) string {
 // Emit writes one empty commit per entry on top of tip and moves the local
 // branch there. Any unpushed local commits are discarded: they are derived
 // data and get recomputed.
-func (m Mirror) Emit(tip string, entries []Entry, a Author) (string, error) {
+func (m Clone) Emit(tip string, entries []Entry, a Author) (string, error) {
 	ref := "refs/heads/" + m.Branch
 	if tip != "" {
 		if _, err := gitx.Git(m.Path, "update-ref", ref, tip); err != nil {
@@ -148,14 +149,14 @@ func (m Mirror) Emit(tip string, entries []Entry, a Author) (string, error) {
 
 // Push sends the local branch to origin. It fails without forcing if the
 // remote moved; the caller refetches and retries.
-func (m Mirror) Push() error {
+func (m Clone) Push() error {
 	ref := "refs/heads/" + m.Branch
 	_, err := gitx.Git(m.Path, "push", "-q", "origin", ref+":"+ref)
 	return err
 }
 
 // Count returns the number of commits reachable from tip.
-func (m Mirror) Count(tip string) int {
+func (m Clone) Count(tip string) int {
 	if tip == "" {
 		return 0
 	}
@@ -167,7 +168,7 @@ func (m Mirror) Count(tip string) int {
 	return n
 }
 
-func (m Mirror) rev(ref string) string {
+func (m Clone) rev(ref string) string {
 	out, err := gitx.Git(m.Path, "rev-parse", "-q", "--verify", ref+"^{commit}")
 	if err != nil {
 		return ""
