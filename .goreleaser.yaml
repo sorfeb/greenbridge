@@ -46,6 +46,44 @@ checksum:
 sboms:
   - artifacts: archive
 
+# Package channels. Each pushes to a repo of its own, which the default Actions token
+# can't reach: release.yml passes PACKAGE_REPOS_TOKEN, a fine-grained token scoped to
+# those two repos. Without that secret, skip_upload is true and nothing is pushed, so a
+# tag still releases before the repos exist. Snapshot builds never publish.
+homebrew_casks:
+  - name: gbridge
+    repository:
+      owner: sorfeb
+      name: homebrew-tap
+      token: "{{ .Env.PACKAGE_REPOS_TOKEN }}"
+    skip_upload: '{{ if index .Env "PACKAGE_REPOS_TOKEN" }}auto{{ else }}true{{ end }}' # auto: v0.2.0-rc.1 stays out of the tap
+    homepage: https://github.com/sorfeb/greenbridge
+    description: Mirror commits GitHub can't see onto your GitHub contribution graph
+    binaries: [gbridge]
+    completions:
+      bash: completions/gbridge.bash
+      zsh: completions/_gbridge
+      fish: completions/gbridge.fish
+    # Release binaries are unsigned (issue #28). Without this, Gatekeeper reports the
+    # download as damaged. `install` is the key in v2.18; v2.19 renames it install_steps.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/gbridge"]
+          end
+
+scoops:
+  - name: gbridge
+    repository:
+      owner: sorfeb
+      name: scoop-bucket
+      token: "{{ .Env.PACKAGE_REPOS_TOKEN }}"
+    skip_upload: '{{ if index .Env "PACKAGE_REPOS_TOKEN" }}auto{{ else }}true{{ end }}'
+    homepage: https://github.com/sorfeb/greenbridge
+    description: Mirror commits GitHub can't see onto your GitHub contribution graph
+    license: MIT
+
 snapshot:
   version_template: "{{incpatch .Version}}-next"
 
