@@ -108,6 +108,30 @@ const emailWindow = "the last year"
 
 func emailSince() time.Time { return time.Now().AddDate(-1, 0, 0) }
 
+// gatherRepos inspects cfg's source repos the way plan does: one git log
+// each, in parallel.
+func gatherRepos(cfg *config.Config) []repoFacts {
+	rfs := make([]repoFacts, len(cfg.Repos))
+	var present []sourceRepo
+	var at []int
+	for i, repo := range cfg.Repos {
+		rfs[i].path = repo
+		if _, err := os.Stat(repo); err != nil {
+			rfs[i].missing = true
+			continue
+		}
+		present, at = append(present, sourceRepo{path: repo}), append(at, i)
+	}
+	for j, in := range inspectAll(cfg, present, emailSince()) {
+		rf := &rfs[at[j]]
+		rf.notGit, rf.hasGitHub, rf.authors = in.unreadable, in.gitHub, in.authors
+		if !in.unreadable && !in.hosted {
+			rf.userName, _ = gitx.Git(rf.path, "config", "user.name")
+		}
+	}
+	return rfs
+}
+
 func gather(gh ghx.GitHub) *facts {
 	f := &facts{}
 	f.git, f.gitErr = gitx.Git("", "--version")
@@ -119,21 +143,7 @@ func gather(gh ghx.GitHub) *facts {
 	if f.cfgErr != nil {
 		return f
 	}
-	for _, repo := range f.cfg.Repos {
-		rf := repoFacts{path: repo}
-		if _, err := os.Stat(repo); err != nil {
-			rf.missing = true
-		} else if hasGitHub, err := source.HasGitHubRemote(repo); err != nil {
-			rf.notGit = true
-		} else {
-			rf.hasGitHub = hasGitHub
-			if !hasGitHub || f.cfg.IncludeGitHubRepos {
-				rf.authors, _ = source.Authors(repo, emailSince())
-				rf.userName, _ = gitx.Git(repo, "config", "user.name")
-			}
-		}
-		f.repos = append(f.repos, rf)
-	}
+	f.repos = gatherRepos(f.cfg)
 	for _, dir := range f.cfg.ScanFolders {
 		sf := scanFacts{path: dir}
 		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {

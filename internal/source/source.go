@@ -4,6 +4,7 @@ package source
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,64 +24,109 @@ type Activity struct {
 	Time  time.Time // author date with its original UTC offset
 }
 
-// Read returns the activity in repo: commits authored by any of emails, on any branch,
-// remote-tracking branch, or tag. Stash and notes refs are excluded.
+// ErrUnreadable matches the error Inspect returns when repo is not a
+// readable git repo. The error's text stays git's own.
+var ErrUnreadable = errors.New("not a readable git repo")
+
+type unreadableError struct{ err error }
+
+func (e unreadableError) Error() string        { return e.err.Error() }
+func (e unreadableError) Unwrap() error        { return e.err }
+func (e unreadableError) Is(target error) bool { return target == ErrUnreadable }
+
+// Inspection is what one source repo holds.
+type Inspection struct {
+	GitHubRemote bool     // a remote points at github.com
+	History      *History // nil when the repo has a github.com remote and the caller skips those
+}
+
+// Inspect checks repo's remotes, then reads its history in one git log. With
+// skipGitHub, a repo with a github.com remote costs one git run instead of
+// two: GitHub already counts it.
+func Inspect(repo string, skipGitHub bool) (Inspection, error) {
+	gh, err := hasGitHubRemote(repo)
+	if err != nil {
+		return Inspection{}, unreadableError{err}
+	}
+	in := Inspection{GitHubRemote: gh}
+	if gh && skipGitHub {
+		return in, nil
+	}
+	in.History, err = readHistory(repo)
+	return in, err
+}
+
+// History is every commit on a repo's branches, remote-tracking branches and
+// tags. Every other ref is left out: stash, notes, and tool refs such as
+// editor checkpoints under refs/t3/, which hold commits the user never made.
+// It holds no messages, paths, or diffs, and never leaves the machine.
+type History struct {
+	repo    string
+	commits []commit
+}
+
+type commit struct {
+	sha, name, email string // email lowercased, name trimmed
+	time             time.Time
+}
+
+// readHistory runs one git log over repo.
+func readHistory(repo string) (*History, error) {
+	// --author is avoided: it takes a regex and misreads emails containing
+	// "+" or ".". --since is avoided too: it filters by committer date and
+	// stops early on out-of-order history. Both filters run on the result.
+	out, err := gitx.Git(repo, "log", "--branches", "--remotes", "--tags", "--no-color",
+		"--format=%H%x1f%an%x1f%ae%x1f%aI")
+	if err != nil {
+		return nil, err
+	}
+	h := &History{repo: repo}
+	for line := range strings.SplitSeq(out, "\n") {
+		f := strings.Split(strings.TrimRight(line, "\r"), "\x1f")
+		if len(f) != 4 {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, f[3])
+		if err != nil {
+			return nil, fmt.Errorf("%s: commit %s: bad author date %q", repo, f[0], f[3])
+		}
+		h.commits = append(h.commits, commit{f[0], strings.TrimSpace(f[1]), normEmail(f[2]), t})
+	}
+	return h, nil
+}
+
+// Activity returns the commits authored by any of emails on or after since.
 // A zero since means all history.
-func Read(repo string, emails []string, since time.Time) ([]Activity, error) {
+func (h *History) Activity(emails []string, since time.Time) []Activity {
 	want := map[string]bool{}
 	for _, e := range emails {
 		want[normEmail(e)] = true
 	}
-	// Author filtering happens here, not via --author, which takes a regex
-	// and misreads emails containing "+" or ".". --since is also avoided:
-	// it filters by committer date and stops early on out-of-order history.
-	lines, err := logFields(repo, "%H", "%ae", "%aI")
-	if err != nil {
-		return nil, err
-	}
 	var acts []Activity
-	for _, f := range lines {
-		if !want[normEmail(f[1])] {
-			continue
+	for _, c := range h.commits {
+		if want[c.email] && !before(c.time, since) {
+			acts = append(acts, Activity{SHA: c.sha, Email: c.email, Repo: h.repo, Time: c.time})
 		}
-		t, err := time.Parse(time.RFC3339, f[2])
-		if err != nil {
-			return nil, fmt.Errorf("%s: commit %s: bad author date %q", repo, f[0], f[2])
-		}
-		if !since.IsZero() && t.Before(since) {
-			continue
-		}
-		acts = append(acts, Activity{SHA: f[0], Email: normEmail(f[1]), Repo: repo, Time: t})
 	}
-	return acts, nil
+	return acts
 }
 
-// Author is one author identity in a repo and the commits it made.
+// Author is one author identity in a source repo and the commits it made.
 type Author struct {
 	Name    string
 	Email   string // lowercased
 	Commits int
 }
 
-// Authors counts commits per author name and email on the refs Read reads,
-// authored on or after since. A zero since means all history. Sorted by
-// email, then name.
-func Authors(repo string, since time.Time) ([]Author, error) {
-	lines, err := logFields(repo, "%an", "%ae", "%aI")
-	if err != nil {
-		return nil, err
-	}
+// Authors counts commits per author name and email on or after since. A zero
+// since means all history. Sorted by email, then name.
+func (h *History) Authors(since time.Time) []Author {
 	type key struct{ name, email string }
 	counts := map[key]int{}
-	for _, f := range lines {
-		t, err := time.Parse(time.RFC3339, f[2])
-		if err != nil {
-			return nil, fmt.Errorf("%s: bad author date %q", repo, f[2])
+	for _, c := range h.commits {
+		if !before(c.time, since) {
+			counts[key{c.name, c.email}]++
 		}
-		if !since.IsZero() && t.Before(since) {
-			continue
-		}
-		counts[key{strings.TrimSpace(f[0]), normEmail(f[1])}]++
 	}
 	authors := make([]Author, 0, len(counts))
 	for k, n := range counts {
@@ -89,34 +135,14 @@ func Authors(repo string, since time.Time) ([]Author, error) {
 	slices.SortFunc(authors, func(a, b Author) int {
 		return cmp.Or(strings.Compare(a.Email, b.Email), strings.Compare(a.Name, b.Name))
 	})
-	return authors, nil
+	return authors
 }
 
-// logFields runs git log over branches, remote-tracking branches and tags,
-// one commit per line split into the given format fields. Every other ref is
-// left out: stash, notes, and tool refs such as editor checkpoints under
-// refs/t3/, which hold commits the user never made.
-func logFields(repo string, fields ...string) ([][]string, error) {
-	out, err := gitx.Git(repo, "log", "--branches", "--remotes", "--tags", "--no-color",
-		"--format="+strings.Join(fields, "%x1f"))
-	if err != nil {
-		return nil, err
-	}
-	var lines [][]string
-	for line := range strings.SplitSeq(out, "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		if f := strings.Split(strings.TrimRight(line, "\r"), "\x1f"); len(f) == len(fields) {
-			lines = append(lines, f)
-		}
-	}
-	return lines, nil
-}
+func before(t, since time.Time) bool { return !since.IsZero() && t.Before(since) }
 
-// HasGitHubRemote reports whether any remote points at github.com. GitHub
+// hasGitHubRemote reports whether any remote points at github.com. GitHub
 // already counts pushes to such repos, so mirroring them double counts.
-func HasGitHubRemote(repo string) (bool, error) {
+func hasGitHubRemote(repo string) (bool, error) {
 	out, err := gitx.Git(repo, "remote", "-v")
 	if err != nil {
 		return false, err
