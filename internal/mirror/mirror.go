@@ -220,11 +220,10 @@ func (m Clone) ids(tip string) (map[string]bool, error) {
 	if tip == "" {
 		return ids, nil
 	}
-	out, err := gitx.Git(m.Path, "log", "--format=%s", tip)
-	if err != nil {
-		return nil, err
-	}
-	for s := range strings.SplitSeq(out, "\n") {
+	for s, err := range gitx.Lines(m.Path, "log", "--format=%s", tip) {
+		if err != nil {
+			return nil, err
+		}
 		if id := parseSubject(s); id != "" {
 			ids[id] = true
 		}
