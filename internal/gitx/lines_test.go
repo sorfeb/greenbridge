@@ -58,7 +58,11 @@ func TestLinesStopsGitOnEarlyBreak(t *testing.T) {
 	if err := os.WriteFile(msg, []byte(strings.Repeat("a line of a very long message\n", 100_000)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	gittest.Git(t, repo, nil, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-F", msg)
+	identity := []string{ // CI runners have no global user.name or user.email
+		"GIT_AUTHOR_NAME=Dev", "GIT_AUTHOR_EMAIL=dev@example.com",
+		"GIT_COMMITTER_NAME=Dev", "GIT_COMMITTER_EMAIL=dev@example.com",
+	}
+	gittest.Git(t, repo, identity, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-F", msg)
 
 	before := runtime.NumGoroutine()
 	done := make(chan []string)
