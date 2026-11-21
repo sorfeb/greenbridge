@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -216,11 +217,13 @@ func findRepos(dir string) []sourceRepo {
 	return out
 }
 
-// inspection is what one repo holds for cfg.
+// inspection is what one source repo holds for cfg, from one git log.
 type inspection struct {
-	unreadable bool // err says why
-	hosted     bool // has a github.com remote, and cfg leaves those out
-	acts       []source.Activity
+	unreadable bool              // err says why
+	gitHub     bool              // has a github.com remote
+	hosted     bool              // gitHub, and cfg leaves those out: not read
+	acts       []source.Activity // by cfg's emails, on or after since
+	authors    []source.Author   // every author on or after since
 	err        error
 }
 
@@ -241,18 +244,23 @@ func inspectAll(cfg *config.Config, repos []sourceRepo, since time.Time) []inspe
 	return out
 }
 
-// inspect checks the remote first, so a repo cfg leaves out costs one git
-// run instead of two.
+// inspect reads repo once and keeps both views of its history, so the full
+// history is dropped before the next repo is read.
 func inspect(cfg *config.Config, repo string, since time.Time) inspection {
-	gh, err := source.HasGitHubRemote(repo)
-	if err != nil {
+	in, err := source.Inspect(repo, !cfg.IncludeGitHubRepos)
+	switch {
+	case errors.Is(err, source.ErrUnreadable):
 		return inspection{unreadable: true, err: err}
+	case err != nil:
+		return inspection{gitHub: in.GitHubRemote, err: err}
+	case in.History == nil:
+		return inspection{gitHub: true, hosted: true}
 	}
-	if gh && !cfg.IncludeGitHubRepos {
-		return inspection{hosted: true}
+	return inspection{
+		gitHub:  in.GitHubRemote,
+		acts:    in.History.Activity(cfg.Emails, since),
+		authors: in.History.Authors(since),
 	}
-	acts, err := source.Read(repo, cfg.Emails, since)
-	return inspection{acts: acts, err: err}
 }
 
 // MirrorClone builds the mirror clone handle from the mirror settings.
