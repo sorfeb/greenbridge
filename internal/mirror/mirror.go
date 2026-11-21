@@ -106,6 +106,24 @@ func (l *Ledger) Missing(desired []Entry) []Entry {
 	return out
 }
 
+// Orphans counts the mirror IDs in the ledger that no desired entry
+// produces: work from another machine sharing the mirror repo, from a source
+// repo or email no longer configured, or history rewritten in sha identity
+// mode. Publish never removes them.
+func (l *Ledger) Orphans(desired []Entry) int {
+	want := make(map[string]bool, len(desired))
+	for _, e := range desired {
+		want[e.ID] = true
+	}
+	n := 0
+	for id := range l.IDs {
+		if !want[id] {
+			n++
+		}
+	}
+	return n
+}
+
 // PublishOptions controls how Publish writes.
 type PublishOptions struct {
 	DryRun bool // compute only, write nothing

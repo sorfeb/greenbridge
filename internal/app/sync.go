@@ -23,6 +23,7 @@ type SyncResult struct {
 	Ledger   int
 	Added    int
 	Pushed   bool
+	Orphans  int        // IDs in the mirror no source repo produces; never deleted
 	NewRepos []RepoStat // repos a scan folder contributed for the first time
 }
 
@@ -62,5 +63,6 @@ func Publish(cfg *config.Config, p *Plan, opt mirror.PublishOptions, log io.Writ
 	if err != nil {
 		return nil, err
 	}
-	return &SyncResult{Desired: len(p.Entries), Ledger: pub.Ledger, Added: pub.Added, Pushed: pub.Pushed}, nil
+	// A retried push rereads the ledger, so count orphans after Publish.
+	return &SyncResult{Desired: len(p.Entries), Ledger: pub.Ledger, Added: pub.Added, Pushed: pub.Pushed, Orphans: p.orphans()}, nil
 }
