@@ -50,9 +50,11 @@ type Plan struct {
 	Ledger   int            // IDs already in the mirror
 	New      []mirror.Entry // desired entries missing from the mirror, sorted by time
 	FetchErr error          // fetch failed: Ledger and New are from the last successful fetch
+	Orphans  int            // IDs in the mirror no source repo produces; zero with Since, which leaves older work out on purpose
 
 	clone  mirror.Clone
 	ledger *mirror.Ledger
+	since  time.Time
 }
 
 // ComputePlan reads every configured repo, and every repo found in a scan
@@ -67,7 +69,7 @@ func ComputePlan(cfg *config.Config, secret []byte, opt PlanOptions) (*Plan, err
 	if err := markNew(cfg, d.Repos); err != nil {
 		return nil, err
 	}
-	p := &Plan{Desired: *d, clone: MirrorClone(cfg)}
+	p := &Plan{Desired: *d, clone: MirrorClone(cfg), since: opt.Since}
 	if opt.Offline {
 		p.clone.Remote = ""
 	}
@@ -75,7 +77,25 @@ func ComputePlan(cfg *config.Config, secret []byte, opt PlanOptions) (*Plan, err
 		return nil, err
 	}
 	p.Ledger, p.New, p.FetchErr = len(p.ledger.IDs), p.ledger.Missing(p.Entries), p.ledger.FetchErr
+	p.Orphans = p.orphans()
 	return p, nil
+}
+
+// orphans counts the ledger's IDs missing from desired. With since, desired
+// leaves older work out on purpose, so none are counted.
+func (p *Plan) orphans() int {
+	if !p.since.IsZero() {
+		return 0
+	}
+	return p.ledger.Orphans(p.Entries)
+}
+
+// WriteOrphans writes the orphan line, or nothing when there are none. Plan
+// and sync both print it.
+func WriteOrphans(w io.Writer, n int) {
+	if n > 0 {
+		fmt.Fprintf(w, "%d in mirror not found in source repos on this machine\n", n)
+	}
 }
 
 // markNew flags the repos found in scan folders that no sync has recorded.
