@@ -1,12 +1,14 @@
 package mirror
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/sorfeb/greenbridge/internal/gittest"
@@ -258,5 +260,26 @@ func TestLedgerOrphans(t *testing.T) {
 	}
 	if n := l.Orphans([]Entry{e2, entry("bbbbbbbbbbb1", "2025-02-01T00:00:00Z")}); n != 2 {
 		t.Errorf("Orphans() = %d, want 2 (e1 and e3)", n)
+	}
+}
+
+// The fast-import stream is produced as git reads it, whatever the read size.
+func TestFastImportStream(t *testing.T) {
+	r := newStream("refs/heads/main", "0123abcd", "me", "1+me@users.noreply.github.com", []Entry{e1, e2})
+	got, err := io.ReadAll(iotest.OneByteReader(r))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "commit refs/heads/main\n" +
+		"author me <1+me@users.noreply.github.com> 1735835400 +0700\n" +
+		"committer me <1+me@users.noreply.github.com> 1735835400 +0700\n" +
+		"data 18\ngb/1 aaaaaaaaaaa1\n" +
+		"from 0123abcd\n\n" +
+		"commit refs/heads/main\n" +
+		"author me <1+me@users.noreply.github.com> 1735916400 -0500\n" +
+		"committer me <1+me@users.noreply.github.com> 1735916400 -0500\n" +
+		"data 18\ngb/1 aaaaaaaaaaa2\n\n"
+	if string(got) != want {
+		t.Errorf("stream =\n%s\nwant\n%s", got, want)
 	}
 }

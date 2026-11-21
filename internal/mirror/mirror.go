@@ -6,6 +6,7 @@
 package mirror
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -258,21 +259,44 @@ func (m Clone) emit(tip string, entries []Entry, a Author) (string, error) {
 			return "", err
 		}
 	}
-	name, email := clean(a.Name), clean(a.Email)
-	var b strings.Builder
-	for i, e := range entries {
-		date := fmt.Sprintf("%d %s", e.Time.Unix(), e.Time.Format("-0700"))
-		msg := "gb/1 " + e.ID + "\n"
-		fmt.Fprintf(&b, "commit %s\nauthor %s <%s> %s\ncommitter %s <%s> %s\ndata %d\n%s", ref, name, email, date, name, email, date, len(msg), msg)
-		if i == 0 && tip != "" {
-			fmt.Fprintf(&b, "from %s\n", tip)
-		}
-		b.WriteString("\n")
-	}
-	if _, err := gitx.Run(m.Path, nil, strings.NewReader(b.String()), "fast-import", "--quiet"); err != nil {
+	stream := newStream(ref, tip, clean(a.Name), clean(a.Email), entries)
+	if _, err := gitx.Run(m.Path, nil, stream, "fast-import", "--quiet"); err != nil {
 		return "", err
 	}
 	return m.rev(ref), nil
+}
+
+// stream is the git fast-import input for one mirror commit per entry, on
+// top of tip when there is one. Each commit's text is made as git reads it,
+// so a large batch never sits in memory twice.
+type stream struct {
+	ref, tip, name, email string
+	entries               []Entry
+	next                  int // index of the next entry to write
+	buf                   bytes.Buffer
+}
+
+func newStream(ref, tip, name, email string, entries []Entry) *stream {
+	return &stream{ref: ref, tip: tip, name: name, email: email, entries: entries}
+}
+
+func (s *stream) Read(p []byte) (int, error) {
+	for s.buf.Len() == 0 {
+		if s.next == len(s.entries) {
+			return 0, io.EOF
+		}
+		e := s.entries[s.next]
+		date := fmt.Sprintf("%d %s", e.Time.Unix(), e.Time.Format("-0700"))
+		msg := "gb/1 " + e.ID + "\n"
+		fmt.Fprintf(&s.buf, "commit %s\nauthor %s <%s> %s\ncommitter %s <%s> %s\ndata %d\n%s",
+			s.ref, s.name, s.email, date, s.name, s.email, date, len(msg), msg)
+		if s.next == 0 && s.tip != "" {
+			fmt.Fprintf(&s.buf, "from %s\n", s.tip)
+		}
+		s.buf.WriteString("\n")
+		s.next++
+	}
+	return s.buf.Read(p)
 }
 
 // push sends the local branch to origin. It fails without forcing if the
