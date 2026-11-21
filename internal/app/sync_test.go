@@ -101,7 +101,7 @@ func TestDateOnlyPolicy(t *testing.T) {
 		Emails: []string{"me@work.com"}, Repos: []string{src},
 		TimePolicy: ident.PolicyDateOnly, Identity: ident.ModeAuthorDate,
 	}
-	d, err := Collect(cfg, testSecret, time.Time{})
+	d, err := Collect(cfg, testSecret, PlanOptions{})
 	if err != nil || len(d.Entries) != 1 {
 		t.Fatalf("collect: %v %v", d, err)
 	}

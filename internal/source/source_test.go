@@ -29,7 +29,7 @@ func TestHistoryReadsBranchesRemotesAndTagsOnly(t *testing.T) {
 	gittest.CommitOnRef(t, repo, "refs/notes/commits", "Me Dev", "notes@laptop.example", "2025-03-05T10:00:00Z")
 	gittest.CommitAs(t, repo, "Me Dev", "me@work.example", "2020-01-01T10:00:00Z")
 
-	in, err := Inspect(repo, true)
+	in, err := Inspect(repo, InspectOptions{SkipGitHub: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,11 +79,11 @@ func TestInspectGitHubRemote(t *testing.T) {
 	gittest.Commit(t, repo, "me@work.example", "2025-03-01T10:00:00Z")
 	gittest.Git(t, repo, nil, "remote", "add", "origin", "https://GitHub.com/me/app.git")
 
-	in, err := Inspect(repo, true)
+	in, err := Inspect(repo, InspectOptions{SkipGitHub: true})
 	if err != nil || !in.GitHubRemote || in.History != nil {
 		t.Errorf("Inspect(skip) = %+v, %v; want a github.com remote and no history", in, err)
 	}
-	in, err = Inspect(repo, false)
+	in, err = Inspect(repo, InspectOptions{})
 	if err != nil || !in.GitHubRemote || in.History == nil || len(in.History.Activity([]string{"me@work.example"}, time.Time{})) != 1 {
 		t.Errorf("Inspect(include) = %+v, %v; want a github.com remote and one commit", in, err)
 	}
@@ -95,7 +95,7 @@ func TestInspectUnreadable(t *testing.T) {
 		"plain folder": t.TempDir(),
 		"missing":      filepath.Join(t.TempDir(), "gone"),
 	} {
-		if _, err := Inspect(dir, true); !errors.Is(err, ErrUnreadable) {
+		if _, err := Inspect(dir, InspectOptions{SkipGitHub: true}); !errors.Is(err, ErrUnreadable) {
 			t.Errorf("%s: Inspect() = %v, want ErrUnreadable", name, err)
 		}
 	}
@@ -106,7 +106,7 @@ func TestInspectEmptyRepo(t *testing.T) {
 	gittest.Need(t)
 	repo := t.TempDir()
 	gittest.Init(t, repo)
-	in, err := Inspect(repo, true)
+	in, err := Inspect(repo, InspectOptions{SkipGitHub: true})
 	if err != nil || in.History == nil {
 		t.Fatalf("Inspect() = %+v, %v; want an empty history", in, err)
 	}

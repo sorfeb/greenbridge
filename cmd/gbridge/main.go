@@ -196,6 +196,7 @@ type planFlags struct {
 	since   string
 	weeks   int
 	offline bool
+	fetch   bool
 }
 
 func (f *planFlags) set() *flag.FlagSet {
@@ -203,6 +204,7 @@ func (f *planFlags) set() *flag.FlagSet {
 	fs.StringVar(&f.since, "since", "", "only commits on or after YYYY-MM-DD")
 	fs.IntVar(&f.weeks, "weeks", 53, "weeks shown in the graph")
 	fs.BoolVar(&f.offline, "offline", false, "skip fetching the mirror")
+	fs.BoolVar(&f.fetch, "fetch", false, "git fetch every source repo first")
 	return fs
 }
 
@@ -217,7 +219,7 @@ func runPlan(args []string) error {
 	if err != nil {
 		return err
 	}
-	p, err := app.ComputePlan(cfg, secret, app.PlanOptions{Since: t, Offline: f.offline})
+	p, err := app.ComputePlan(cfg, secret, app.PlanOptions{Since: t, Offline: f.offline, Fetch: f.fetch})
 	if err != nil {
 		return err
 	}
@@ -226,8 +228,8 @@ func runPlan(args []string) error {
 }
 
 type syncFlags struct {
-	since       string
-	dry, noPush bool
+	since              string
+	dry, noPush, fetch bool
 }
 
 func (f *syncFlags) set(name string) *flag.FlagSet {
@@ -235,6 +237,7 @@ func (f *syncFlags) set(name string) *flag.FlagSet {
 	fs.StringVar(&f.since, "since", "", "only commits on or after YYYY-MM-DD")
 	fs.BoolVar(&f.dry, "dry-run", false, "compute only, write nothing")
 	fs.BoolVar(&f.noPush, "no-push", false, "write the local mirror, skip push")
+	fs.BoolVar(&f.fetch, "fetch", false, "git fetch every source repo first")
 	return fs
 }
 
@@ -249,10 +252,11 @@ func runSync(name string, args []string) error {
 	if err != nil {
 		return err
 	}
-	res, err := app.Sync(cfg, secret, app.SyncOptions{Since: t, DryRun: f.dry, NoPush: f.noPush}, os.Stderr)
+	res, err := app.Sync(cfg, secret, app.SyncOptions{Since: t, DryRun: f.dry, NoPush: f.noPush, Fetch: f.fetch}, os.Stderr)
 	if err != nil {
 		return err
 	}
+	app.WriteFetchFailed(os.Stderr, res.FetchFailed)
 	app.WriteNewRepos(os.Stdout, res.NewRepos)
 	verb := "added"
 	if f.dry {

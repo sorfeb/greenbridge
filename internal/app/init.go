@@ -196,7 +196,7 @@ func pickRepos(out io.Writer, cfg *config.Config, paths []string, found []source
 			repos = append(repos, r)
 		}
 	}
-	ins := inspectAll(cfg, repos, time.Time{})
+	ins := inspectAll(cfg, repos, time.Time{}, false)
 	for i, r := range repos {
 		named := r.scanFolder == ""
 		switch {

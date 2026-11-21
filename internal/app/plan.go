@@ -23,6 +23,7 @@ type RepoStat struct {
 	Matched    int
 	Skipped    string // reason, empty when read
 	ScanFolder string // scan folder the repo was found in; empty when listed in repos
+	FetchErr   error  // asked to fetch and it failed; Matched counts what the repo already had
 	New        bool   // found in a scan folder and not yet recorded by a sync
 }
 
@@ -40,6 +41,7 @@ type Desired struct {
 type PlanOptions struct {
 	Since   time.Time // zero means all history
 	Offline bool      // read the local mirror only, never contact origin
+	Fetch   bool      // git fetch every source repo before reading it
 }
 
 // Plan is what the mirror should gain: the desired entries, the mirror's
@@ -62,7 +64,7 @@ type Plan struct {
 // recorded in FetchErr, not returned: a preview still works offline, and
 // Publish refuses to write from it.
 func ComputePlan(cfg *config.Config, secret []byte, opt PlanOptions) (*Plan, error) {
-	d, err := Collect(cfg, secret, opt.Since)
+	d, err := Collect(cfg, secret, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +128,28 @@ func (p *Plan) NewRepos() []RepoStat {
 	return out
 }
 
+// FetchFailed returns the source repos whose fetch failed. Each was read as
+// it was.
+func (p *Plan) FetchFailed() []RepoStat { return fetchFailed(p.Repos) }
+
+func fetchFailed(repos []RepoStat) []RepoStat {
+	var out []RepoStat
+	for _, r := range repos {
+		if r.FetchErr != nil {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// WriteFetchFailed writes one line per source repo whose fetch failed. Plan
+// and sync both print it.
+func WriteFetchFailed(w io.Writer, repos []RepoStat) {
+	for _, r := range repos {
+		fmt.Fprintf(w, "  fetch failed %s: %v\n", r.Path, r.FetchErr)
+	}
+}
+
 // WriteNewRepos writes one line per repo a scan folder contributed for the
 // first time. Plan and sync both print it.
 func WriteNewRepos(w io.Writer, repos []RepoStat) {
@@ -139,14 +163,14 @@ func WriteNewRepos(w io.Writer, repos []RepoStat) {
 // by a configured email and no github.com remote (unless cfg includes
 // those); any other found repo is left out of Repos without a word, since a
 // scan folder holds many.
-func Collect(cfg *config.Config, secret []byte, since time.Time) (*Desired, error) {
+func Collect(cfg *config.Config, secret []byte, opt PlanOptions) (*Desired, error) {
 	repos, missing := sources(cfg)
-	found := inspectAll(cfg, repos, since)
+	found := inspectAll(cfg, repos, opt.Since, opt.Fetch)
 	d := &Desired{}
 	seen := map[string]bool{}
 	for i, r := range repos {
 		in, inFolder := found[i], r.scanFolder != ""
-		st := RepoStat{Path: r.path, ScanFolder: r.scanFolder}
+		st := RepoStat{Path: r.path, ScanFolder: r.scanFolder, FetchErr: in.fetchErr}
 		switch {
 		case in.unreadable:
 			st.Skipped = "not a readable git repo"
@@ -227,6 +251,7 @@ type inspection struct {
 	unreadable bool              // err says why
 	gitHub     bool              // has a github.com remote
 	hosted     bool              // gitHub, and cfg leaves those out: not read
+	fetchErr   error             // asked to fetch and it failed
 	acts       []source.Activity // by cfg's emails, on or after since
 	authors    []source.Author   // every author on or after since
 	err        error
@@ -234,7 +259,7 @@ type inspection struct {
 
 // inspectAll inspects repos in parallel, since each inspection mostly waits
 // on git. Results keep the order of repos.
-func inspectAll(cfg *config.Config, repos []sourceRepo, since time.Time) []inspection {
+func inspectAll(cfg *config.Config, repos []sourceRepo, since time.Time, fetch bool) []inspection {
 	out := make([]inspection, len(repos))
 	slots := make(chan struct{}, runtime.NumCPU())
 	var wg sync.WaitGroup
@@ -242,7 +267,7 @@ func inspectAll(cfg *config.Config, repos []sourceRepo, since time.Time) []inspe
 		wg.Go(func() {
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			out[i] = inspect(cfg, r.path, since)
+			out[i] = inspect(cfg, r.path, since, fetch)
 		})
 	}
 	wg.Wait()
@@ -251,20 +276,21 @@ func inspectAll(cfg *config.Config, repos []sourceRepo, since time.Time) []inspe
 
 // inspect reads repo once and keeps both views of its history, so the full
 // history is dropped before the next repo is read.
-func inspect(cfg *config.Config, repo string, since time.Time) inspection {
-	in, err := source.Inspect(repo, !cfg.IncludeGitHubRepos)
+func inspect(cfg *config.Config, repo string, since time.Time, fetch bool) inspection {
+	in, err := source.Inspect(repo, source.InspectOptions{SkipGitHub: !cfg.IncludeGitHubRepos, Fetch: fetch})
 	switch {
 	case errors.Is(err, source.ErrUnreadable):
 		return inspection{unreadable: true, err: err}
 	case err != nil:
-		return inspection{gitHub: in.GitHubRemote, err: err}
+		return inspection{gitHub: in.GitHubRemote, fetchErr: in.FetchErr, err: err}
 	case in.History == nil:
 		return inspection{gitHub: true, hosted: true}
 	}
 	return inspection{
-		gitHub:  in.GitHubRemote,
-		acts:    in.History.Activity(cfg.Emails, since),
-		authors: in.History.Authors(since),
+		gitHub:   in.GitHubRemote,
+		fetchErr: in.FetchErr,
+		acts:     in.History.Activity(cfg.Emails, since),
+		authors:  in.History.Authors(since),
 	}
 }
 

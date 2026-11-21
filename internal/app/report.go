@@ -18,6 +18,7 @@ func (p *Plan) Report(w io.Writer, today time.Time, weeks int, paint brand.Paint
 			fmt.Fprintf(w, "  %5d  %s\n", r.Matched, r.Path)
 		}
 	}
+	WriteFetchFailed(w, p.FetchFailed())
 	WriteNewRepos(w, p.NewRepos())
 	fmt.Fprintf(w, "\n%d commits matched, %d after dedup", p.Matched, len(p.Entries))
 	if len(p.Entries) > 0 {

@@ -15,23 +15,25 @@ type SyncOptions struct {
 	Since  time.Time
 	DryRun bool // compute only, write nothing
 	NoPush bool // write local mirror, skip push
+	Fetch  bool // git fetch every source repo before reading it
 }
 
 // SyncResult reports what a sync did.
 type SyncResult struct {
-	Desired  int
-	Ledger   int
-	Added    int
-	Pushed   bool
-	Orphans  int        // IDs in the mirror no source repo produces; never deleted
-	NewRepos []RepoStat // repos a scan folder contributed for the first time
+	Desired     int
+	Ledger      int
+	Added       int
+	Pushed      bool
+	Orphans     int        // IDs in the mirror no source repo produces; never deleted
+	NewRepos    []RepoStat // repos a scan folder contributed for the first time
+	FetchFailed []RepoStat // source repos whose fetch failed, read as they were
 }
 
 // Sync brings the mirror up to date: ComputePlan, then Publish. Unless it is
 // a dry run, it then records the new repos found in scan folders, so the
 // next run no longer calls them new.
 func Sync(cfg *config.Config, secret []byte, opt SyncOptions, log io.Writer) (*SyncResult, error) {
-	p, err := ComputePlan(cfg, secret, PlanOptions{Since: opt.Since})
+	p, err := ComputePlan(cfg, secret, PlanOptions{Since: opt.Since, Fetch: opt.Fetch})
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +41,7 @@ func Sync(cfg *config.Config, secret []byte, opt SyncOptions, log io.Writer) (*S
 	if err != nil {
 		return nil, err
 	}
-	res.NewRepos = p.NewRepos()
+	res.NewRepos, res.FetchFailed = p.NewRepos(), p.FetchFailed()
 	if opt.DryRun {
 		return res, nil
 	}
