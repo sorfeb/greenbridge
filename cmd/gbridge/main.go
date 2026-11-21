@@ -258,7 +258,7 @@ func runSync(name string, args []string) error {
 	if f.dry {
 		verb = "would add"
 	}
-	fmt.Printf("%d desired, %d already mirrored, %s %d", res.Desired, res.Existing, verb, res.Added)
+	fmt.Printf("%d desired, %d already mirrored, %s %d", res.Desired, res.Ledger, verb, res.Added)
 	if res.Pushed {
 		fmt.Printf(", pushed to %s", cfg.Mirror.Repo)
 	}

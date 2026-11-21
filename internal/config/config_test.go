@@ -18,8 +18,8 @@ func TestValidateRejectsWhatGitHubCannotUse(t *testing.T) {
 		{"valid", func(*Config) {}, ""},
 		{"local only", func(c *Config) { c.Mirror.Repo, c.Mirror.Remote = "", "" }, ""},
 		{"dotted mirror name", func(c *Config) { c.Mirror.Repo = "octocat/my.activity_log-2" }, ""},
-		{"author email without @", func(c *Config) { c.Author.Email = "octocat" }, "author.email"},
-		{"author email with a display name", func(c *Config) { c.Author.Email = "Octo <me@example.com>" }, "author.email"},
+		{"author email without @", func(c *Config) { c.MirrorAuthor.Email = "octocat" }, "author.email"},
+		{"author email with a display name", func(c *Config) { c.MirrorAuthor.Email = "Octo <me@example.com>" }, "author.email"},
 		{"mirror name with a space", func(c *Config) { c.Mirror.Repo = "octocat/my mirror" }, "mirror.repo"},
 		{"mirror without owner", func(c *Config) { c.Mirror.Repo = "greenbridge-activity" }, "mirror.repo"},
 		{"mirror named ..", func(c *Config) { c.Mirror.Repo = "octocat/.." }, "mirror.repo"},
@@ -31,7 +31,7 @@ func TestValidateRejectsWhatGitHubCannotUse(t *testing.T) {
 				t.Fatal(err)
 			}
 			c.Emails = []string{"me@work.example"}
-			c.Author = Author{Name: "octocat", Email: "583231+octocat@users.noreply.github.com"}
+			c.MirrorAuthor = MirrorAuthor{Name: "octocat", Email: "583231+octocat@users.noreply.github.com"}
 			c.Mirror.Repo = "octocat/greenbridge-activity"
 			c.Mirror.Remote = "https://github.com/octocat/greenbridge-activity.git"
 			tt.mutate(c)
@@ -49,7 +49,7 @@ func TestValidateRejectsWhatGitHubCannotUse(t *testing.T) {
 // Configs written before scan folders existed keep loading, and a config
 // without scan folders saves without the field, so older gbridge builds read
 // it unchanged.
-func TestLoadConfigWithoutScan(t *testing.T) {
+func TestLoadConfigWithoutScanFolders(t *testing.T) {
 	t.Setenv("GBRIDGE_HOME", t.TempDir())
 	p, _ := Path()
 	old := `{"version":1,"emails":["me@work.example"],"repos":["/work/api"],
@@ -62,8 +62,8 @@ func TestLoadConfigWithoutScan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() = %v", err)
 	}
-	if len(c.Scan) != 0 || !slices.Equal(c.Repos, []string{"/work/api"}) {
-		t.Errorf("scan %q repos %q, want none and [/work/api]", c.Scan, c.Repos)
+	if len(c.ScanFolders) != 0 || !slices.Equal(c.Repos, []string{"/work/api"}) {
+		t.Errorf("scan %q repos %q, want none and [/work/api]", c.ScanFolders, c.Repos)
 	}
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
@@ -72,12 +72,12 @@ func TestLoadConfigWithoutScan(t *testing.T) {
 		t.Errorf("saved config gained a scan field:\n%s", b)
 	}
 
-	c.Scan = []string{"/work"}
+	c.ScanFolders = []string{"/work"}
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
-	if c, err = Load(); err != nil || !slices.Equal(c.Scan, []string{"/work"}) {
-		t.Errorf("reloaded scan %q, %v; want [/work]", c.Scan, err)
+	if c, err = Load(); err != nil || !slices.Equal(c.ScanFolders, []string{"/work"}) {
+		t.Errorf("reloaded scan %q, %v; want [/work]", c.ScanFolders, err)
 	}
 }
 

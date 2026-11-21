@@ -18,11 +18,11 @@ import (
 
 // RepoStat summarizes one source repo.
 type RepoStat struct {
-	Path    string
-	Matched int
-	Skipped string // reason, empty when scanned
-	Scan    string // scan folder the repo was found in; empty when listed in repos
-	New     bool   // found in a scan folder and not yet recorded by a sync
+	Path       string
+	Matched    int
+	Skipped    string // reason, empty when read
+	ScanFolder string // scan folder the repo was found in; empty when listed in repos
+	New        bool   // found in a scan folder and not yet recorded by a sync
 }
 
 // scanDepth is how many folder levels below a scan folder repos are found.
@@ -50,11 +50,11 @@ type Plan struct {
 	New      []mirror.Entry // desired entries missing from the mirror, sorted by time
 	FetchErr error          // fetch failed: Ledger and New are from the last successful fetch
 
-	mirror mirror.Mirror
-	tip    string // mirror commit New builds on
+	clone mirror.Clone
+	tip   string // mirror commit New builds on
 }
 
-// ComputePlan scans every configured repo, and every repo found in a scan
+// ComputePlan reads every configured repo, and every repo found in a scan
 // folder, and compares the result with the mirror. A failed fetch is
 // recorded in FetchErr, not returned: a preview still works offline, and
 // Publish refuses to write from it.
@@ -66,11 +66,11 @@ func ComputePlan(cfg *config.Config, secret []byte, opt PlanOptions) (*Plan, err
 	if err := markNew(cfg, d.Repos); err != nil {
 		return nil, err
 	}
-	p := &Plan{Desired: *d, mirror: MirrorOf(cfg)}
+	p := &Plan{Desired: *d, clone: MirrorClone(cfg)}
 	if opt.Offline {
-		p.mirror.Remote = ""
+		p.clone.Remote = ""
 	}
-	if err := p.mirror.Ensure(); err != nil {
+	if err := p.clone.Ensure(); err != nil {
 		return nil, err
 	}
 	return p, p.read()
@@ -78,7 +78,7 @@ func ComputePlan(cfg *config.Config, secret []byte, opt PlanOptions) (*Plan, err
 
 // markNew flags the repos found in scan folders that no sync has recorded.
 func markNew(cfg *config.Config, repos []RepoStat) error {
-	if len(cfg.Scan) == 0 {
+	if len(cfg.ScanFolders) == 0 {
 		return nil
 	}
 	seen, err := config.LoadSeen()
@@ -87,7 +87,7 @@ func markNew(cfg *config.Config, repos []RepoStat) error {
 	}
 	for i := range repos {
 		r := &repos[i]
-		r.New = r.Scan != "" && r.Skipped == "" && !seen[r.Path]
+		r.New = r.ScanFolder != "" && r.Skipped == "" && !seen[r.Path]
 	}
 	return nil
 }
@@ -108,19 +108,19 @@ func (p *Plan) NewRepos() []RepoStat {
 // first time. Plan and sync both print it.
 func WriteNewRepos(w io.Writer, repos []RepoStat) {
 	for _, r := range repos {
-		fmt.Fprintf(w, "  new   %s (from scan folder %s)\n", r.Path, r.Scan)
+		fmt.Fprintf(w, "  new   %s (from scan folder %s)\n", r.Path, r.ScanFolder)
 	}
 }
 
 // read fills the mirror half of p from the mirror's current tip, falling back
 // to the last fetched tip when the fetch fails.
 func (p *Plan) read() error {
-	tip, err := p.mirror.Fetch()
+	tip, err := p.clone.Fetch()
 	p.FetchErr = err
 	if err != nil {
-		tip = p.mirror.Last()
+		tip = p.clone.Last()
 	}
-	ledger, err := p.mirror.Ledger(tip)
+	ledger, err := p.clone.Ledger(tip)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func (p *Plan) read() error {
 	return nil
 }
 
-// Collect scans every configured repo and every repo found in a scan folder,
+// Collect reads every configured repo and every repo found in a scan folder,
 // and computes mirror entries. A found repo counts only when it has commits
 // by a configured email and no github.com remote (unless cfg includes
 // those); any other found repo is left out of Repos without a word, since a
@@ -139,20 +139,20 @@ func Collect(cfg *config.Config, secret []byte, since time.Time) (*Desired, erro
 	d := &Desired{}
 	seen := map[string]bool{}
 	for i, r := range repos {
-		in, scanned := found[i], r.scan != ""
-		st := RepoStat{Path: r.path, Scan: r.scan}
+		in, inFolder := found[i], r.scanFolder != ""
+		st := RepoStat{Path: r.path, ScanFolder: r.scanFolder}
 		switch {
 		case in.unreadable:
 			st.Skipped = "not a readable git repo"
-		case in.hosted && scanned:
+		case in.hosted && inFolder:
 			continue
 		case in.hosted:
 			st.Skipped = "has a github.com remote (GitHub already counts it)"
-		case in.err != nil && scanned:
+		case in.err != nil && inFolder:
 			st.Skipped = in.err.Error()
 		case in.err != nil:
 			return nil, in.err
-		case len(in.acts) == 0 && scanned:
+		case len(in.acts) == 0 && inFolder:
 			continue
 		default:
 			st.Matched = len(in.acts)
@@ -169,15 +169,15 @@ func Collect(cfg *config.Config, secret []byte, since time.Time) (*Desired, erro
 		}
 	}
 	for _, dir := range missing {
-		d.Repos = append(d.Repos, RepoStat{Path: dir, Scan: dir, Skipped: "scan folder not found"})
+		d.Repos = append(d.Repos, RepoStat{Path: dir, ScanFolder: dir, Skipped: "scan folder not found"})
 	}
 	sort.SliceStable(d.Entries, func(i, j int) bool { return d.Entries[i].Time.Before(d.Entries[j].Time) })
 	return d, nil
 }
 
-// sourceRepo is one repo to read: listed in repos (scan empty), or found in
-// scan folder scan.
-type sourceRepo struct{ path, scan string }
+// sourceRepo is one source repo to read: listed in repos (scanFolder empty),
+// or found in scanFolder.
+type sourceRepo struct{ path, scanFolder string }
 
 // sources lists cfg's repos, then the repos found in each scan folder, once
 // each by cleaned path. Finding repos only looks for .git entries, so git
@@ -185,17 +185,17 @@ type sourceRepo struct{ path, scan string }
 // come back apart.
 func sources(cfg *config.Config) (repos []sourceRepo, missing []string) {
 	listed := map[string]bool{}
-	add := func(path, scan string) {
+	add := func(path, scanFolder string) {
 		path = filepath.Clean(path)
 		if !listed[path] {
 			listed[path] = true
-			repos = append(repos, sourceRepo{path, scan})
+			repos = append(repos, sourceRepo{path, scanFolder})
 		}
 	}
 	for _, r := range cfg.Repos {
 		add(r, "")
 	}
-	for _, dir := range cfg.Scan {
+	for _, dir := range cfg.ScanFolders {
 		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 			missing = append(missing, dir)
 			continue
@@ -251,13 +251,13 @@ func inspect(cfg *config.Config, repo string, since time.Time) inspection {
 	if gh && !cfg.IncludeGitHubRepos {
 		return inspection{hosted: true}
 	}
-	acts, err := source.Scan(repo, cfg.Emails, since)
+	acts, err := source.Read(repo, cfg.Emails, since)
 	return inspection{acts: acts, err: err}
 }
 
-// MirrorOf builds the mirror handle from config.
-func MirrorOf(cfg *config.Config) mirror.Mirror {
-	return mirror.Mirror{Path: cfg.Mirror.Path, Remote: cfg.Mirror.Remote, Branch: cfg.Mirror.Branch}
+// MirrorClone builds the mirror clone handle from the mirror settings.
+func MirrorClone(cfg *config.Config) mirror.Clone {
+	return mirror.Clone{Path: cfg.Mirror.Path, Remote: cfg.Mirror.Remote, Branch: cfg.Mirror.Branch}
 }
 
 // Diff returns entries whose IDs are not in the ledger.

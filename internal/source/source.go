@@ -23,10 +23,10 @@ type Activity struct {
 	Time  time.Time // author date with its original UTC offset
 }
 
-// Scan returns commits in repo authored by any of emails, on any branch,
+// Read returns the activity in repo: commits authored by any of emails, on any branch,
 // remote-tracking branch, or tag. Stash and notes refs are excluded.
 // A zero since means all history.
-func Scan(repo string, emails []string, since time.Time) ([]Activity, error) {
+func Read(repo string, emails []string, since time.Time) ([]Activity, error) {
 	want := map[string]bool{}
 	for _, e := range emails {
 		want[normEmail(e)] = true
@@ -62,7 +62,7 @@ type Author struct {
 	Commits int
 }
 
-// Authors counts commits per author name and email on the refs Scan reads,
+// Authors counts commits per author name and email on the refs Read reads,
 // authored on or after since. A zero since means all history. Sorted by
 // email, then name.
 func Authors(repo string, since time.Time) ([]Author, error) {
