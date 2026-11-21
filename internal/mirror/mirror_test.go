@@ -17,3 +17,16 @@ func TestParseSubject(t *testing.T) {
 		}
 	}
 }
+
+// ls-remote lists every ref ending in the branch name; only the branch
+// itself counts.
+func TestRemoteTip(t *testing.T) {
+	out := "1111111111111111111111111111111111111111\trefs/heads/x/main\n" +
+		"2222222222222222222222222222222222222222\trefs/heads/main"
+	if got := remoteTip(out, "refs/heads/main"); got != "2222222222222222222222222222222222222222" {
+		t.Errorf("remoteTip(main) = %q, want the main branch's tip", got)
+	}
+	if got := remoteTip(out, "refs/heads/trunk"); got != "" {
+		t.Errorf("remoteTip(trunk) = %q, want none", got)
+	}
+}

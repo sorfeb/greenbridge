@@ -186,8 +186,9 @@ func (m Clone) Publish(l *Ledger, desired []Entry, a Author, opt PublishOptions,
 	return Published{}, fmt.Errorf("push kept failing after %d attempts; run gbridge doctor", attempts)
 }
 
-// fetch returns the current tip of the mirror branch, fetching from origin
-// when there is a remote. An empty string means the branch has no commits.
+// fetch returns the current tip of the mirror branch. With a remote it asks
+// origin for the tip and fetches only when the mirror clone lacks it. An
+// empty string means the branch has no commits.
 func (m Clone) fetch() (string, error) {
 	if m.Remote == "" {
 		return m.rev("refs/heads/" + m.Branch), nil
@@ -200,10 +201,27 @@ func (m Clone) fetch() (string, error) {
 		return "", nil
 	}
 	tracking := "refs/remotes/origin/" + m.Branch
+	// The mirror clone already has the remote's tip: a fetch would bring
+	// nothing.
+	if tip := m.rev(tracking); tip != "" && tip == remoteTip(heads, "refs/heads/"+m.Branch) {
+		return tip, nil
+	}
 	if _, err := gitx.Git(m.Path, "fetch", "-q", "origin", "+refs/heads/"+m.Branch+":"+tracking); err != nil {
 		return "", err
 	}
 	return m.rev(tracking), nil
+}
+
+// remoteTip returns the object ID git ls-remote lists for ref, or "" when
+// ref is not listed. ls-remote matches its pattern against the end of every
+// ref name, so a branch named x/main also matches main.
+func remoteTip(lsRemote, ref string) string {
+	for line := range strings.SplitSeq(lsRemote, "\n") {
+		if id, name, ok := strings.Cut(strings.TrimSpace(line), "\t"); ok && name == ref {
+			return id
+		}
+	}
+	return ""
 }
 
 // last returns the tip from the most recent successful fetch without

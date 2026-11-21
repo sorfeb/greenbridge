@@ -263,6 +263,51 @@ func TestLedgerOrphans(t *testing.T) {
 	}
 }
 
+// traceGit records every git command run from here on and returns a function
+// that reads the record and clears it.
+func traceGit(t *testing.T) func() string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "trace")
+	t.Setenv("GIT_TRACE", path)
+	return func() string {
+		b, _ := os.ReadFile(path)
+		_ = os.Remove(path)
+		return string(b)
+	}
+}
+
+// Open asks the mirror repo for its branch tip first, and fetches only when
+// the tip differs from the one the mirror clone already has.
+func TestOpenFetchesOnlyWhenTheTipMoved(t *testing.T) {
+	gittest.Need(t)
+	tmp := t.TempDir()
+	a, b := remoteClone(t, tmp, "a"), remoteClone(t, tmp, "b")
+	if _, err := a.Publish(open(t, a), []Entry{e1}, author, PublishOptions{}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	trace := traceGit(t)
+	l := open(t, a)
+	if got := trace(); strings.Contains(got, "git fetch") || !strings.Contains(got, "git ls-remote") {
+		t.Errorf("reopening after its own push ran:\n%s\nwant ls-remote and no fetch", got)
+	}
+	if l.FetchErr != nil || len(l.IDs) != 1 || !l.IDs[e1.ID] {
+		t.Fatalf("ledger with an unchanged tip = %+v, want %s", l, e1.ID)
+	}
+
+	if _, err := b.Publish(open(t, b), []Entry{e2}, author, PublishOptions{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	trace()
+	l = open(t, a)
+	if got := trace(); !strings.Contains(got, "git fetch") {
+		t.Errorf("reopening after another machine pushed ran:\n%s\nwant a fetch", got)
+	}
+	if l.FetchErr != nil || len(l.IDs) != 2 || !l.IDs[e2.ID] {
+		t.Errorf("ledger after the tip moved = %+v, want %s and %s", l, e1.ID, e2.ID)
+	}
+}
+
 // The fast-import stream is produced as git reads it, whatever the read size.
 func TestFastImportStream(t *testing.T) {
 	r := newStream("refs/heads/main", "0123abcd", "me", "1+me@users.noreply.github.com", []Entry{e1, e2})
