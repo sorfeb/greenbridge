@@ -51,8 +51,8 @@ type Plan struct {
 	New      []mirror.Entry // desired entries missing from the mirror, sorted by time
 	FetchErr error          // fetch failed: Ledger and New are from the last successful fetch
 
-	clone mirror.Clone
-	tip   string // mirror commit New builds on
+	clone  mirror.Clone
+	ledger *mirror.Ledger
 }
 
 // ComputePlan reads every configured repo, and every repo found in a scan
@@ -71,10 +71,11 @@ func ComputePlan(cfg *config.Config, secret []byte, opt PlanOptions) (*Plan, err
 	if opt.Offline {
 		p.clone.Remote = ""
 	}
-	if err := p.clone.Ensure(); err != nil {
+	if p.ledger, err = p.clone.Open(); err != nil {
 		return nil, err
 	}
-	return p, p.read()
+	p.Ledger, p.New, p.FetchErr = len(p.ledger.IDs), p.ledger.Missing(p.Entries), p.ledger.FetchErr
+	return p, nil
 }
 
 // markNew flags the repos found in scan folders that no sync has recorded.
@@ -111,22 +112,6 @@ func WriteNewRepos(w io.Writer, repos []RepoStat) {
 	for _, r := range repos {
 		fmt.Fprintf(w, "  new   %s (from scan folder %s)\n", r.Path, r.ScanFolder)
 	}
-}
-
-// read fills the mirror half of p from the mirror's current tip, falling back
-// to the last fetched tip when the fetch fails.
-func (p *Plan) read() error {
-	tip, err := p.clone.Fetch()
-	p.FetchErr = err
-	if err != nil {
-		tip = p.clone.Last()
-	}
-	ledger, err := p.clone.Ledger(tip)
-	if err != nil {
-		return err
-	}
-	p.tip, p.Ledger, p.New = tip, len(ledger), Diff(p.Entries, ledger)
-	return nil
 }
 
 // Collect reads every configured repo and every repo found in a scan folder,
@@ -266,15 +251,4 @@ func inspect(cfg *config.Config, repo string, since time.Time) inspection {
 // MirrorClone builds the mirror clone handle from the mirror settings.
 func MirrorClone(cfg *config.Config) mirror.Clone {
 	return mirror.Clone{Path: cfg.Mirror.Path, Remote: cfg.Mirror.Remote, Branch: cfg.Mirror.Branch}
-}
-
-// Diff returns entries whose IDs are not in the ledger.
-func Diff(entries []mirror.Entry, ledger map[string]bool) []mirror.Entry {
-	var out []mirror.Entry
-	for _, e := range entries {
-		if !ledger[e.ID] {
-			out = append(out, e)
-		}
-	}
-	return out
 }
