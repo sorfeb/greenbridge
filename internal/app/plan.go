@@ -274,10 +274,14 @@ func inspectAll(cfg *config.Config, repos []sourceRepo, since time.Time, fetch b
 	return out
 }
 
-// inspect reads repo once and keeps both views of its history, so the full
-// history is dropped before the next repo is read.
+// inspect reads repo once and keeps both views of its history.
 func inspect(cfg *config.Config, repo string, since time.Time, fetch bool) inspection {
-	in, err := source.Inspect(repo, source.InspectOptions{SkipGitHub: !cfg.IncludeGitHubRepos, Fetch: fetch})
+	in, err := source.Inspect(repo, source.InspectOptions{
+		SkipGitHub: !cfg.IncludeGitHubRepos,
+		Fetch:      fetch,
+		Emails:     cfg.Emails,
+		Since:      since,
+	})
 	switch {
 	case errors.Is(err, source.ErrUnreadable):
 		return inspection{unreadable: true, err: err}
@@ -289,8 +293,8 @@ func inspect(cfg *config.Config, repo string, since time.Time, fetch bool) inspe
 	return inspection{
 		gitHub:   in.GitHubRemote,
 		fetchErr: in.FetchErr,
-		acts:     in.History.Activity(cfg.Emails, since),
-		authors:  in.History.Authors(since),
+		acts:     in.History.Activity,
+		authors:  in.History.Authors,
 	}
 }
 

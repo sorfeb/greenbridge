@@ -41,6 +41,12 @@ type InspectOptions struct {
 	SkipGitHub bool
 	// Fetch runs git fetch on the repo's remotes before reading it.
 	Fetch bool
+	// Emails selects the commits History keeps as activity. Each matches
+	// exactly, ignoring case and surrounding space.
+	Emails []string
+	// Since leaves commits authored before it out of History. Zero means
+	// all history.
+	Since time.Time
 }
 
 // Inspection is what one source repo holds.
@@ -51,7 +57,9 @@ type Inspection struct {
 }
 
 // Inspect checks repo's remotes, fetches when asked, then reads its history
-// in one git log. A failed fetch is recorded in FetchErr, not returned.
+// in one streamed git log, keeping only what opt asks for: memory grows with
+// your activity and the number of authors, not with the repo's history. A
+// failed fetch is recorded in FetchErr, not returned.
 func Inspect(repo string, opt InspectOptions) (Inspection, error) {
 	gh, err := hasGitHubRemote(repo)
 	if err != nil {
@@ -64,7 +72,7 @@ func Inspect(repo string, opt InspectOptions) (Inspection, error) {
 	if opt.Fetch {
 		in.FetchErr = fetch(repo)
 	}
-	in.History, err = readHistory(repo)
+	in.History, err = readHistory(repo, opt.Emails, opt.Since)
 	return in, err
 }
 
@@ -95,59 +103,14 @@ func gitReason(err error) string {
 	return first
 }
 
-// History is every commit on a repo's branches, remote-tracking branches and
-// tags. Every other ref is left out: stash, notes, and tool refs such as
-// editor checkpoints under refs/t3/, which hold commits the user never made.
-// It holds no messages, paths, or diffs, and never leaves the machine.
+// History is what one read of a repo's branches, remote-tracking branches
+// and tags keeps. Every other ref is left out: stash, notes, and tool refs
+// such as editor checkpoints under refs/t3/, which hold commits the user
+// never made. It holds no messages, paths, or diffs, and never leaves the
+// machine.
 type History struct {
-	repo    string
-	commits []commit
-}
-
-type commit struct {
-	sha, name, email string // email lowercased, name trimmed
-	time             time.Time
-}
-
-// readHistory runs one git log over repo.
-func readHistory(repo string) (*History, error) {
-	// --author is avoided: it takes a regex and misreads emails containing
-	// "+" or ".". --since is avoided too: it filters by committer date and
-	// stops early on out-of-order history. Both filters run on the result.
-	out, err := gitx.Git(repo, "log", "--branches", "--remotes", "--tags", "--no-color",
-		"--format=%H%x1f%an%x1f%ae%x1f%aI")
-	if err != nil {
-		return nil, err
-	}
-	h := &History{repo: repo}
-	for line := range strings.SplitSeq(out, "\n") {
-		f := strings.Split(strings.TrimRight(line, "\r"), "\x1f")
-		if len(f) != 4 {
-			continue
-		}
-		t, err := time.Parse(time.RFC3339, f[3])
-		if err != nil {
-			return nil, fmt.Errorf("%s: commit %s: bad author date %q", repo, f[0], f[3])
-		}
-		h.commits = append(h.commits, commit{f[0], strings.TrimSpace(f[1]), normEmail(f[2]), t})
-	}
-	return h, nil
-}
-
-// Activity returns the commits authored by any of emails on or after since.
-// A zero since means all history.
-func (h *History) Activity(emails []string, since time.Time) []Activity {
-	want := map[string]bool{}
-	for _, e := range emails {
-		want[normEmail(e)] = true
-	}
-	var acts []Activity
-	for _, c := range h.commits {
-		if want[c.email] && !before(c.time, since) {
-			acts = append(acts, Activity{SHA: c.sha, Email: c.email, Repo: h.repo, Time: c.time})
-		}
-	}
-	return acts
+	Activity []Activity // commits by the emails asked for, in git log order
+	Authors  []Author   // every author with a commit, sorted by email, then name
 }
 
 // Author is one author identity in a source repo and the commits it made.
@@ -157,24 +120,49 @@ type Author struct {
 	Commits int
 }
 
-// Authors counts commits per author name and email on or after since. A zero
-// since means all history. Sorted by email, then name.
-func (h *History) Authors(since time.Time) []Author {
+// readHistory streams one git log over repo and keeps the commits by emails
+// and a count per author, both from since on.
+func readHistory(repo string, emails []string, since time.Time) (*History, error) {
+	want := map[string]bool{}
+	for _, e := range emails {
+		want[normEmail(e)] = true
+	}
 	type key struct{ name, email string }
 	counts := map[key]int{}
-	for _, c := range h.commits {
-		if !before(c.time, since) {
-			counts[key{c.name, c.email}]++
+	h := &History{}
+	// --author is avoided: it takes a regex and misreads emails containing
+	// "+" or ".". --since is avoided too: it filters by committer date and
+	// stops early on out-of-order history. Both filters run here.
+	for line, err := range gitx.Lines(repo, "log", "--branches", "--remotes", "--tags", "--no-color",
+		"--format=%H%x1f%an%x1f%ae%x1f%aI") {
+		if err != nil {
+			return nil, err
+		}
+		f := strings.Split(line, "\x1f")
+		if len(f) != 4 {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, f[3])
+		if err != nil {
+			return nil, fmt.Errorf("%s: commit %s: bad author date %q", repo, f[0], f[3])
+		}
+		if before(t, since) {
+			continue
+		}
+		email := normEmail(f[2])
+		counts[key{strings.TrimSpace(f[1]), email}]++
+		if want[email] {
+			h.Activity = append(h.Activity, Activity{SHA: f[0], Email: email, Repo: repo, Time: t})
 		}
 	}
-	authors := make([]Author, 0, len(counts))
+	h.Authors = make([]Author, 0, len(counts))
 	for k, n := range counts {
-		authors = append(authors, Author{Name: k.name, Email: k.email, Commits: n})
+		h.Authors = append(h.Authors, Author{Name: k.name, Email: k.email, Commits: n})
 	}
-	slices.SortFunc(authors, func(a, b Author) int {
+	slices.SortFunc(h.Authors, func(a, b Author) int {
 		return cmp.Or(strings.Compare(a.Email, b.Email), strings.Compare(a.Name, b.Name))
 	})
-	return authors
+	return h, nil
 }
 
 func before(t, since time.Time) bool { return !since.IsZero() && t.Before(since) }

@@ -13,7 +13,7 @@ import (
 var since2025 = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // One history read serves both views: activity for the configured emails,
-// and every author on the same refs. Editor checkpoint refs such as
+// and every author on the same refs, both from since on. Editor checkpoint refs such as
 // refs/t3/* hold thousands of commits under the tool's own identity; counting
 // them would flag the tool's email as one of the user's.
 func TestHistoryReadsBranchesRemotesAndTagsOnly(t *testing.T) {
@@ -29,7 +29,11 @@ func TestHistoryReadsBranchesRemotesAndTagsOnly(t *testing.T) {
 	gittest.CommitOnRef(t, repo, "refs/notes/commits", "Me Dev", "notes@laptop.example", "2025-03-05T10:00:00Z")
 	gittest.CommitAs(t, repo, "Me Dev", "me@work.example", "2020-01-01T10:00:00Z")
 
-	in, err := Inspect(repo, InspectOptions{SkipGitHub: true})
+	in, err := Inspect(repo, InspectOptions{
+		SkipGitHub: true,
+		Emails:     []string{"ME@work.example ", "old@laptop.example", "t3code@users.noreply.github.com"},
+		Since:      since2025,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +41,7 @@ func TestHistoryReadsBranchesRemotesAndTagsOnly(t *testing.T) {
 		t.Fatalf("Inspect() = %+v, want a read history and no github.com remote", in)
 	}
 
-	authors := in.History.Authors(since2025)
+	authors := in.History.Authors
 	wantAuthors := []Author{
 		{Name: "Me Dev", Email: "me@work.example", Commits: 2},
 		{Name: "Me Dev", Email: "old@laptop.example", Commits: 1},
@@ -47,9 +51,8 @@ func TestHistoryReadsBranchesRemotesAndTagsOnly(t *testing.T) {
 		t.Errorf("Authors() = %+v, want %+v", authors, wantAuthors)
 	}
 
-	acts := in.History.Activity([]string{"ME@work.example ", "old@laptop.example", "t3code@users.noreply.github.com"}, since2025)
 	var got []string
-	for _, a := range acts {
+	for _, a := range in.History.Activity {
 		if a.Repo != repo || len(a.SHA) != 40 {
 			t.Errorf("activity %+v: want repo %s and a full sha", a, repo)
 		}
@@ -65,8 +68,12 @@ func TestHistoryReadsBranchesRemotesAndTagsOnly(t *testing.T) {
 		t.Errorf("Activity() = %q, want %q", got, want)
 	}
 
-	if all := in.History.Activity([]string{"me@work.example"}, time.Time{}); len(all) != 3 {
-		t.Errorf("Activity() with zero since = %d commits, want 3 (all history)", len(all))
+	all, err := Inspect(repo, InspectOptions{SkipGitHub: true, Emails: []string{"me@work.example"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(all.History.Activity); n != 3 {
+		t.Errorf("Activity with zero since = %d commits, want 3 (all history)", n)
 	}
 }
 
@@ -83,8 +90,8 @@ func TestInspectGitHubRemote(t *testing.T) {
 	if err != nil || !in.GitHubRemote || in.History != nil {
 		t.Errorf("Inspect(skip) = %+v, %v; want a github.com remote and no history", in, err)
 	}
-	in, err = Inspect(repo, InspectOptions{})
-	if err != nil || !in.GitHubRemote || in.History == nil || len(in.History.Activity([]string{"me@work.example"}, time.Time{})) != 1 {
+	in, err = Inspect(repo, InspectOptions{Emails: []string{"me@work.example"}})
+	if err != nil || !in.GitHubRemote || in.History == nil || len(in.History.Activity) != 1 {
 		t.Errorf("Inspect(include) = %+v, %v; want a github.com remote and one commit", in, err)
 	}
 }
@@ -106,11 +113,11 @@ func TestInspectEmptyRepo(t *testing.T) {
 	gittest.Need(t)
 	repo := t.TempDir()
 	gittest.Init(t, repo)
-	in, err := Inspect(repo, InspectOptions{SkipGitHub: true})
+	in, err := Inspect(repo, InspectOptions{SkipGitHub: true, Emails: []string{"me@work.example"}})
 	if err != nil || in.History == nil {
 		t.Fatalf("Inspect() = %+v, %v; want an empty history", in, err)
 	}
-	if acts, authors := in.History.Activity([]string{"me@work.example"}, time.Time{}), in.History.Authors(time.Time{}); len(acts)+len(authors) != 0 {
-		t.Errorf("empty repo: activity %v authors %v, want none", acts, authors)
+	if h := in.History; len(h.Activity)+len(h.Authors) != 0 {
+		t.Errorf("empty repo: activity %v authors %v, want none", h.Activity, h.Authors)
 	}
 }
