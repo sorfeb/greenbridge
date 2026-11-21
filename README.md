@@ -35,15 +35,12 @@ gbridge plan                                                  # preview, writes 
 
 <p align="center">Works with GitLab, Bitbucket, Gitea, Forgejo, Codeberg, and any server you can <code>git clone</code> from.</p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-bridge-dark.gif">
-  <img src=".github/assets/how-bridge-light.gif" alt="Commit squares cross a suspension bridge from a private forge to a GitHub contribution graph" width="640">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/proof-dark.svg">
-  <img src=".github/assets/proof-light.svg" alt="A contribution graph before and after gbridge sync: sparse personal activity, then a busy weekday pattern with a two-week holiday left empty. Sample data." width="640">
-</picture>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/proof-dark.svg">
+    <img src=".github/assets/proof-light.svg" alt="A contribution graph before and after gbridge sync: sparse personal activity, then a busy weekday pattern with a two-week holiday left empty. Sample data." width="640">
+  </picture>
+</p>
 
 ### Real account, real numbers
 
@@ -317,3 +314,10 @@ go tool -modfile tools.mod task fix     # auto-fix lint and formatting
 ## License
 
 [MIT](LICENSE)
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-bridge-dark.gif">
+    <img src=".github/assets/how-bridge-light.gif" alt="Commit squares cross a suspension bridge from a private forge to a GitHub contribution graph" width="400">
+  </picture>
+</p>
