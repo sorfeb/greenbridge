@@ -20,6 +20,7 @@ import (
 	"github.com/sorfeb/greenbridge/internal/brand"
 	"github.com/sorfeb/greenbridge/internal/config"
 	"github.com/sorfeb/greenbridge/internal/ghx"
+	"github.com/sorfeb/greenbridge/internal/hook"
 	"github.com/sorfeb/greenbridge/internal/ident"
 )
 
@@ -100,6 +101,18 @@ var commands = []command{
 	{name: "sync", summary: "mirror new activity and push", flags: func() *flag.FlagSet { return new(syncFlags).set("sync") }},
 	{name: "backfill", summary: "alias for sync; use --since to limit history", flags: func() *flag.FlagSet { return new(syncFlags).set("backfill") }},
 	{name: "doctor", summary: "check every precondition for squares to appear"},
+	{
+		name: "hook", summary: "sync in the background on every git push: hook install|uninstall|status",
+		words: []string{"install", "uninstall", "status"},
+		usage: []usageLine{
+			{"install", "start a background sync on every git push from this machine (Git 2.54+)"},
+			{"install --per-repo", "for older Git: write a pre-push hook into each source repo's .git/hooks"},
+			{"uninstall", "remove the push hook from global git config and every source repo"},
+			{"status", "show the push hook, the source repos it covers, and the last background sync"},
+		},
+		note: "No repo's tracked files change. Leave one repo out: git config hook.gbridge.enabled false\n" +
+			"Background sync output goes to sync.log in the greenbridge home.",
+	},
 	{name: "secret", summary: "print the recovery phrase for other machines"},
 	{
 		name: "completion", summary: "print a shell completion script: " + strings.Join(shells, ", "),
@@ -186,6 +199,8 @@ func main() {
 		err = runPlan(args)
 	case "sync", "backfill":
 		err = runSync(cmd, args)
+	case "hook":
+		err = runHook(args)
 	case "doctor":
 		if app.Doctor(os.Stdout, ghx.NewCLI()) > 0 {
 			os.Exit(1)
@@ -313,8 +328,8 @@ func runPlan(args []string) error {
 }
 
 type syncFlags struct {
-	since              string
-	dry, noPush, fetch bool
+	since                      string
+	dry, noPush, fetch, detach bool
 }
 
 func (f *syncFlags) set(name string) *flag.FlagSet {
@@ -323,37 +338,101 @@ func (f *syncFlags) set(name string) *flag.FlagSet {
 	fs.BoolVar(&f.dry, "dry-run", false, "compute only, write nothing")
 	fs.BoolVar(&f.noPush, "no-push", false, "write the local mirror, skip push")
 	fs.BoolVar(&f.fetch, "fetch", false, "git fetch every source repo first")
+	fs.BoolVar(&f.detach, "detach", false, "sync in the background and return at once; output goes to sync.log in the greenbridge home")
 	return fs
+}
+
+// args are the flags a background sync runs with: f without --detach.
+func (f *syncFlags) args() []string {
+	a := []string{"sync"}
+	if f.since != "" {
+		a = append(a, "--since", f.since)
+	}
+	for _, b := range []struct {
+		on   bool
+		name string
+	}{{f.dry, "--dry-run"}, {f.noPush, "--no-push"}, {f.fetch, "--fetch"}} {
+		if b.on {
+			a = append(a, b.name)
+		}
+	}
+	return a
 }
 
 func runSync(name string, args []string) error {
 	var f syncFlags
 	_ = f.set(name).Parse(args)
-	cfg, secret, err := load()
+	files, err := backgroundFiles()
 	if err != nil {
 		return err
+	}
+	if os.Getenv(hook.BackgroundEnv) == "1" {
+		// stdout and stderr are the log; nobody reads the exit code.
+		hook.Serialize(files, os.Stdout, func() (string, error) {
+			summary, orphans, err := syncOnce(&f, os.Stdout, os.Stdout)
+			app.WriteOrphans(os.Stdout, orphans)
+			return summary, err
+		})
+		return nil
+	}
+	if _, _, err := load(); err != nil {
+		return err
+	}
+	if _, err := parseSince(f.since); err != nil {
+		return err
+	}
+	if f.detach {
+		if err := startBackground(f.args()); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "background sync started; output goes to %s\n", files.Log)
+		return nil
+	}
+	if !f.dry {
+		release, ok, err := hook.Hold(files)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("a background sync is running; run again when it finishes (log: %s)", files.Log)
+		}
+		defer release()
+	}
+	summary, orphans, err := syncOnce(&f, os.Stdout, os.Stderr)
+	if err != nil {
+		return err
+	}
+	fmt.Println(summary)
+	app.WriteOrphans(os.Stdout, orphans)
+	return nil
+}
+
+// syncOnce runs one sync with f's options, writing notices to out and
+// progress to log, and returns the summary line and the orphan count.
+func syncOnce(f *syncFlags, out, log io.Writer) (summary string, orphans int, err error) {
+	cfg, secret, err := load()
+	if err != nil {
+		return "", 0, err
 	}
 	t, err := parseSince(f.since)
 	if err != nil {
-		return err
+		return "", 0, err
 	}
-	res, err := app.Sync(cfg, secret, app.SyncOptions{Since: t, DryRun: f.dry, NoPush: f.noPush, Fetch: f.fetch}, os.Stderr)
+	res, err := app.Sync(cfg, secret, app.SyncOptions{Since: t, DryRun: f.dry, NoPush: f.noPush, Fetch: f.fetch}, log)
 	if err != nil {
-		return err
+		return "", 0, err
 	}
-	app.WriteFetchFailed(os.Stderr, res.FetchFailed)
-	app.WriteNewRepos(os.Stdout, res.NewRepos)
+	app.WriteFetchFailed(log, res.FetchFailed)
+	app.WriteNewRepos(out, res.NewRepos)
 	verb := "added"
 	if f.dry {
 		verb = "would add"
 	}
-	fmt.Printf("%d desired, %d already mirrored, %s %d", res.Desired, res.Ledger, verb, res.Added)
+	summary = fmt.Sprintf("%d desired, %d already mirrored, %s %d", res.Desired, res.Ledger, verb, res.Added)
 	if res.Pushed {
-		fmt.Printf(", pushed to %s", cfg.Mirror.Repo)
+		summary += ", pushed to " + cfg.Mirror.Repo
 	}
-	fmt.Println()
-	app.WriteOrphans(os.Stdout, res.Orphans)
-	return nil
+	return summary, res.Orphans, nil
 }
 
 func runSecret() error {
