@@ -80,17 +80,18 @@ var keptGitEnv = map[string]bool{
 }
 
 // childEnv is environ for a background sync: the push's GIT_* variables
-// dropped, no terminal prompts, BackgroundEnv set.
+// dropped, no terminal prompts and no credential manager windows (nobody is
+// there to answer them; a failure goes to the log), BackgroundEnv set.
 func childEnv(environ []string) []string {
-	out := make([]string, 0, len(environ)+2)
+	out := make([]string, 0, len(environ)+3)
 	for _, kv := range environ {
 		k, _, _ := strings.Cut(kv, "=")
-		if k == BackgroundEnv || strings.HasPrefix(strings.ToUpper(k), "GIT_") && !keptGitEnv[k] {
+		if k == BackgroundEnv || k == "GCM_INTERACTIVE" || strings.HasPrefix(strings.ToUpper(k), "GIT_") && !keptGitEnv[k] {
 			continue
 		}
 		out = append(out, kv)
 	}
-	return append(out, "GIT_TERMINAL_PROMPT=0", BackgroundEnv+"=1")
+	return append(out, "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", BackgroundEnv+"=1")
 }
 
 // Serialize runs sync under the lock and writes a result line for each run

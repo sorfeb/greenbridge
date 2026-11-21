@@ -69,11 +69,13 @@ func TestChildEnv(t *testing.T) {
 	in := []string{
 		"PATH=/bin", "GIT_DIR=.git", "GIT_EXEC_PATH=/x", "GIT_PREFIX=sub/", "GIT_INDEX_FILE=i",
 		"git_work_tree=/w", "GIT_CONFIG_GLOBAL=/g", "GIT_SSH_COMMAND=ssh -i k", "GIT_TERMINAL_PROMPT=1", "HOME=/h",
+		"GCM_INTERACTIVE=always", // a credential window would pop up from a background push
 	}
 	got := childEnv(in)
 	slices.Sort(got)
 	want := []string{
-		BackgroundEnv + "=1", "GIT_CONFIG_GLOBAL=/g", "GIT_SSH_COMMAND=ssh -i k", "GIT_TERMINAL_PROMPT=0", "HOME=/h", "PATH=/bin",
+		BackgroundEnv + "=1", "GCM_INTERACTIVE=never", "GIT_CONFIG_GLOBAL=/g", "GIT_SSH_COMMAND=ssh -i k", "GIT_TERMINAL_PROMPT=0",
+		"HOME=/h", "PATH=/bin",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("childEnv =\n%q\nwant\n%q", got, want)
