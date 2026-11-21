@@ -115,7 +115,7 @@ go install github.com/sorfeb/greenbridge/cmd/gbridge@latest    # Go 1.27+
 
 Or download the archive for your platform from [Releases](https://github.com/sorfeb/greenbridge/releases) and put `gbridge` on your `PATH`.
 
-While this repo is private, set `GOPRIVATE=github.com/sorfeb/*` first, or run `go install ./cmd/gbridge` from a clone.
+mise and the release archives need the first tagged release, v0.1.0. Until it ships, use `go install`.
 
 The command is `gbridge`, not `gb`: oh-my-zsh and prezto alias `gb` to `git branch`.
 
