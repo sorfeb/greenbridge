@@ -3,6 +3,7 @@ package brand
 import (
 	"bytes"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/gif"
 	"image/png"
@@ -90,5 +91,58 @@ func TestWordmarkFitsHero(t *testing.T) {
 		if _, ok := glyphs[r]; !ok {
 			t.Errorf("no glyph for %q", r)
 		}
+	}
+}
+
+// The social preview's haze whispers: the bridge and wordmark keep their exact
+// colours, no background pixel outshines the dimmest green square, and the
+// haze covers the canvas rather than leaving it flat.
+func TestSocialHazeStaysBehindHero(t *testing.T) {
+	const w, h, size = 1280, 640, 12
+	img := socialImage(w, h, size)
+	p := themePalette(true)
+	ox, oy := (w-heroW*size)/2, (h-heroH*size)/2
+	onHero := make([]bool, w*h)
+	for _, c := range hero(p) {
+		sq := c.span*size - c.span*size/5
+		want := hexColor(c.color)
+		for dy := range sq {
+			for dx := range sq {
+				x, y := ox+c.x*size+dx, oy+c.y*size+dy
+				onHero[y*w+x] = true
+				corner := (dx == 0 || dx == sq-1) && (dy == 0 || dy == sq-1)
+				if got := img.RGBAAt(x, y); !corner && got != want {
+					t.Fatalf("hero pixel %d,%d is %v, want %v", x, y, got, want)
+				}
+			}
+		}
+	}
+	dimmest := luma(hexColor(p.green[1]))
+	bg, textured := hexColor(socialBg), 0
+	for y := range h {
+		for x := range w {
+			if onHero[y*w+x] {
+				continue
+			}
+			c := img.RGBAAt(x, y)
+			if luma(c) >= dimmest {
+				t.Fatalf("background pixel %d,%d (%v) outshines the dimmest green %s", x, y, c, p.green[1])
+			}
+			if c != bg {
+				textured++
+			}
+		}
+	}
+	if textured < w*h/2 {
+		t.Errorf("haze covers %d of %d background pixels, want at least half", textured, w*h)
+	}
+}
+
+func luma(c color.RGBA) int { return 2126*int(c.R) + 7152*int(c.G) + 722*int(c.B) }
+
+// GitHub rejects a social preview of 1 MB or more.
+func TestSocialPNGUnderGitHubLimit(t *testing.T) {
+	if n := len(socialPNG()); n >= 1<<20 {
+		t.Errorf("social preview is %d bytes, GitHub's limit is 1 MB", n)
 	}
 }

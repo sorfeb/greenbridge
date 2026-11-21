@@ -118,8 +118,11 @@ func heroSVG(dark bool) []byte {
 
 var xmlEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
 
-// socialPNG is GitHub's 1280x640 social preview: the dark hero on GitHub's
-// dark canvas.
+// socialBg is GitHub's dark canvas.
+const socialBg = "#0d1117"
+
+// socialPNG is GitHub's 1280x640 social preview: the dark hero over a faint
+// ASCII haze on GitHub's dark canvas.
 func socialPNG() []byte {
 	const w, h, size = 1280, 640, 12
 	img := socialImage(w, h, size)
@@ -132,14 +135,10 @@ func socialPNG() []byte {
 
 func socialImage(w, h, size int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	bg := hexColor("#0d1117")
-	for y := range h {
-		for x := range w {
-			img.Set(x, y, bg)
-		}
-	}
 	ox, oy := (w-heroW*size)/2, (h-heroH*size)/2
-	for _, c := range hero(themePalette(true)) {
+	cells := hero(themePalette(true))
+	haze(img, newCoverage(w, h, cells, size, ox, oy))
+	for _, c := range cells {
 		sq := c.span*size - c.span*size/5
 		col := hexColor(c.color)
 		x0, y0 := ox+c.x*size, oy+c.y*size
@@ -153,6 +152,175 @@ func socialImage(w, h, size int) *image.RGBA {
 		}
 	}
 	return img
+}
+
+// The haze behind the social hero: faint glyphs from a density ramp over a
+// soft wash, densest in a glow under the deck and fading to bare corners,
+// under CRT scanlines. Amounts are integers with 256 as 1.0, so every
+// platform draws the same pixels (arm64 may fuse float maths into FMA).
+const (
+	hazeRamp             = " .'-:=+*#%"
+	hazeTint             = "#5f9a6e"
+	hazeCellW, hazeCellH = 8, 12
+	hazeGlyph            = 60 // glyph opacity at full haze: dimmer than the dimmest green even then
+	hazeWash             = 20 // wash opacity at full haze
+	hazeClear            = 3  // px left bare around each hero square
+	hazeSoft             = 22 // radius px over which nearby hero squares fade the glyphs
+	scanEvery, scanDark  = 3, 77
+)
+
+// asciiGlyphs is a 5x7 pixel face for the haze ramp.
+var asciiGlyphs = map[byte][7]string{
+	'.':  {".....", ".....", ".....", ".....", ".....", "..#..", "....."},
+	'\'': {"..#..", "..#..", ".....", ".....", ".....", ".....", "....."},
+	'-':  {".....", ".....", ".....", ".###.", ".....", ".....", "....."},
+	':':  {".....", "..#..", ".....", ".....", ".....", "..#..", "....."},
+	'=':  {".....", ".....", "#####", ".....", "#####", ".....", "....."},
+	'+':  {".....", "..#..", "..#..", "#####", "..#..", "..#..", "....."},
+	'*':  {".....", "#.#.#", ".###.", "#####", ".###.", "#.#.#", "....."},
+	'#':  {".#.#.", ".#.#.", "#####", ".#.#.", "#####", ".#.#.", ".#.#."},
+	'%':  {"##..#", "##..#", "...#.", "..#..", ".#...", "#..##", "#..##"},
+}
+
+func haze(img *image.RGBA, hero coverage) {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	bg, tint := hexColor(socialBg), hexColor(hazeTint)
+	field := hazeField(w, h)
+	for y := range h {
+		for x := range w {
+			img.SetRGBA(x, y, mix(bg, tint, hazeWash*field(x, y)/256))
+		}
+	}
+	cols, rows := w/hazeCellW, h/hazeCellH
+	padX, padY := (w-cols*hazeCellW)/2, (h-rows*hazeCellH)/2
+	jitter := mulberry(artSeed + 2)
+	for cy := range rows {
+		for cx := range cols {
+			x0, y0 := padX+cx*hazeCellW, padY+cy*hazeCellH
+			mx, my := x0+hazeCellW/2, y0+hazeCellH/2
+			f := field(mx, my)
+			// Jitter of up to 0.7 of a ramp step breaks up the contour lines.
+			j := int(jitter.next()*358) - 179
+			ch := hazeRamp[max(0, min(len(hazeRamp)-1, (f*(len(hazeRamp)-1)+j+128)>>8))]
+			if ch == ' ' {
+				continue
+			}
+			const r = hazeSoft
+			near := min(256, hero.count(mx-r, my-r, mx+r, my+r)*640/(4*r*r))
+			a := hazeGlyph * (64 + 3*f/4) / 256 * (256 - near*115/256) / 256
+			gx, gy := x0+(hazeCellW-5)/2, y0+(hazeCellH-7)/2
+			for py, row := range asciiGlyphs[ch] {
+				for px, on := range row {
+					x, y := gx+px, gy+py
+					if on != '#' || hero.count(x-hazeClear, y-hazeClear, x+hazeClear+1, y+hazeClear+1) > 0 {
+						continue
+					}
+					img.SetRGBA(x, y, mix(img.RGBAAt(x, y), tint, a))
+				}
+			}
+		}
+	}
+	black := color.RGBA{A: 0xff}
+	for y := 0; y < h; y += scanEvery {
+		for x := range w {
+			img.SetRGBA(x, y, mix(img.RGBAAt(x, y), black, scanDark))
+		}
+	}
+}
+
+// hazeField returns the haze amount, 0-256, at a pixel: a base level, a glow
+// centred under the deck, and noise clouds, faded toward the corners.
+func hazeField(w, h int) func(x, y int) int {
+	coarse := newValueNoise(w, h, 120, artSeed)
+	fine := newValueNoise(w, h, 48, artSeed+1)
+	return func(x, y int) int {
+		n := (3*coarse.at(x, y) + 2*fine.at(x, y)) / 5
+		// The glow falls off as (1-q)^2 over an ellipse, close to a gaussian.
+		const rx, ry = 1100, 450
+		dx, dy := x-w/2, y-h*6/10
+		q := min(256, dx*dx*256/(rx*rx)+dy*dy*256/(ry*ry))
+		glow := (256 - q) * (256 - q) / 256
+		f := max(0, min(256, 77+glow*115/256+(n-128)*179/256))
+		du, dv := (2*x-w)*256/w, (2*y-h)*256/h
+		vignette := max(0, 256-(du*du+dv*dv)/512*333/256)
+		return f * vignette / 256
+	}
+}
+
+// valueNoise is smooth noise: random values 0-255 on a lattice scale px
+// apart, eased between.
+type valueNoise struct {
+	scale int
+	lat   [][]int
+}
+
+func newValueNoise(w, h, scale int, seed uint32) valueNoise {
+	r := mulberry(seed)
+	lat := make([][]int, h/scale+2)
+	for j := range lat {
+		lat[j] = make([]int, w/scale+2)
+		for i := range lat[j] {
+			lat[j][i] = int(r.next() * 256)
+		}
+	}
+	return valueNoise{scale, lat}
+}
+
+func (n valueNoise) at(x, y int) int {
+	fx, fy := x*256/n.scale, y*256/n.scale
+	i, j := fx>>8, fy>>8
+	ease := func(t int) int { return t * t * (768 - 2*t) >> 16 }
+	sx, sy := ease(fx&255), ease(fy&255)
+	top := n.lat[j][i]*(256-sx) + n.lat[j][i+1]*sx
+	bottom := n.lat[j+1][i]*(256-sx) + n.lat[j+1][i+1]*sx
+	return (top*(256-sy) + bottom*sy) >> 16
+}
+
+// coverage counts hero pixels in any rectangle in constant time.
+type coverage struct {
+	w, h int
+	sum  []int // summed-area table, (w+1) by (h+1)
+}
+
+func newCoverage(w, h int, cells []cell, size, ox, oy int) coverage {
+	on := make([]int, w*h)
+	for _, c := range cells {
+		sq := c.span*size - c.span*size/5
+		for dy := range sq {
+			for dx := range sq {
+				on[(oy+c.y*size+dy)*w+ox+c.x*size+dx] = 1
+			}
+		}
+	}
+	cv := coverage{w, h, make([]int, (w+1)*(h+1))}
+	for y := range h {
+		for x := range w {
+			cv.sum[(y+1)*(w+1)+x+1] = on[y*w+x] + cv.sum[y*(w+1)+x+1] + cv.sum[(y+1)*(w+1)+x] - cv.sum[y*(w+1)+x]
+		}
+	}
+	return cv
+}
+
+// count returns the hero pixels in [x0,x1) x [y0,y1), clipped to the image.
+func (cv coverage) count(x0, y0, x1, y1 int) int {
+	x0, y0, x1, y1 = max(0, x0), max(0, y0), min(cv.w, x1), min(cv.h, y1)
+	if x0 >= x1 || y0 >= y1 {
+		return 0
+	}
+	w := cv.w + 1
+	return cv.sum[y1*w+x1] - cv.sum[y0*w+x1] - cv.sum[y1*w+x0] + cv.sum[y0*w+x0]
+}
+
+// mix lays s over d at opacity a/256.
+func mix(d, s color.RGBA, a int) color.RGBA {
+	m := func(d, s uint8) uint8 {
+		v := (int(d)*(256-a) + int(s)*a + 128) >> 8
+		if v < 0 || v > 255 {
+			panic(fmt.Sprintf("opacity %d outside 0-256", a)) // amounts are constants in this file
+		}
+		return uint8(v)
+	}
+	return color.RGBA{m(d.R, s.R), m(d.G, s.G), m(d.B, s.B), 0xff}
 }
 
 func hexColor(s string) color.RGBA {
