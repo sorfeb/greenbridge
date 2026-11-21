@@ -16,7 +16,7 @@ func tryLock(path string) (release func(), ok bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil { //nolint:gosec // G115: a file descriptor fits in an int
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = f.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			return nil, false, nil
