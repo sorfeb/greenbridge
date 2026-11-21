@@ -180,6 +180,19 @@ func Hold(f Files) (release func(), ok bool, err error) {
 	return tryLock(f.Lock)
 }
 
+// HoldWait is Hold, retrying every poll until timeout while a background
+// sync holds the lock. ok is false when the lock is still held at timeout.
+func HoldWait(f Files, timeout, poll time.Duration) (release func(), ok bool, err error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		release, ok, err = Hold(f)
+		if err != nil || ok || !time.Now().Before(deadline) {
+			return release, ok, err
+		}
+		time.Sleep(min(poll, time.Until(deadline)))
+	}
+}
+
 // LogFailure appends a failed result line to the log, for errors the push
 // hook can tell nobody else about.
 func LogFailure(f Files, msg string) {

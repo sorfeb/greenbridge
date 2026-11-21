@@ -390,11 +390,15 @@ func runSync(name string, args []string) error {
 	}
 	if !f.dry {
 		release, ok, err := hook.Hold(files)
+		if err == nil && !ok {
+			fmt.Fprintln(os.Stderr, "waiting for the background sync to finish...")
+			release, ok, err = hook.HoldWait(files, foregroundWait, 250*time.Millisecond)
+		}
 		if err != nil {
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("a background sync is running; run again when it finishes (log: %s)", files.Log)
+			return fmt.Errorf("a background sync is still running after %s; run again when it finishes (log: %s)", foregroundWait, files.Log)
 		}
 		defer release()
 	}
@@ -406,6 +410,10 @@ func runSync(name string, args []string) error {
 	app.WriteOrphans(os.Stdout, orphans)
 	return nil
 }
+
+// foregroundWait is how long a manual sync waits for a running background
+// sync before giving up.
+const foregroundWait = 30 * time.Second
 
 // syncOnce runs one sync with f's options, writing notices to out and
 // progress to log, and returns the summary line and the orphan count.

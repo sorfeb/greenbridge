@@ -82,6 +82,29 @@ func TestChildEnv(t *testing.T) {
 	}
 }
 
+// A foreground sync started while a background sync holds the lock waits
+// for it to finish rather than failing, and gives up only after timeout.
+func TestHoldWait(t *testing.T) {
+	f := FilesIn(t.TempDir())
+	release, ok, err := Hold(f)
+	if err != nil || !ok {
+		t.Fatalf("Hold = %v, %v", ok, err)
+	}
+	if _, ok, err := HoldWait(f, 150*time.Millisecond, 20*time.Millisecond); err != nil || ok {
+		t.Fatalf("HoldWait while held = %v, %v; want false after the timeout", ok, err)
+	}
+	time.AfterFunc(100*time.Millisecond, release)
+	start := time.Now()
+	again, ok, err := HoldWait(f, 5*time.Second, 20*time.Millisecond)
+	if err != nil || !ok {
+		t.Fatalf("HoldWait after release = %v, %v; want the lock", ok, err)
+	}
+	defer again()
+	if d := time.Since(start); d < 80*time.Millisecond || d > 3*time.Second {
+		t.Errorf("HoldWait returned after %v, want soon after the release at 100ms", d)
+	}
+}
+
 func TestSerializeSkipsWhileLocked(t *testing.T) {
 	f := FilesIn(t.TempDir())
 	var outer, inner bytes.Buffer
