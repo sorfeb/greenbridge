@@ -55,8 +55,8 @@ func TestAddEmailKeepsSecretAndMirror(t *testing.T) {
 	if want := []string{"me@work.example", "old@laptop.example"}; !slices.Equal(after.Emails, want) {
 		t.Errorf("emails = %q, want %q", after.Emails, want)
 	}
-	if after.Mirror != before.Mirror || after.Author != before.Author {
-		t.Errorf("mirror %+v author %+v changed, want %+v %+v", after.Mirror, after.Author, before.Mirror, before.Author)
+	if after.Mirror != before.Mirror || after.MirrorAuthor != before.MirrorAuthor {
+		t.Errorf("mirror %+v author %+v changed, want %+v %+v", after.Mirror, after.MirrorAuthor, before.Mirror, before.MirrorAuthor)
 	}
 	if _, s := homeFiles(t); !bytes.Equal(s, secret) {
 		t.Error("secret file changed")
@@ -107,7 +107,7 @@ func TestEditFailureWritesNothing(t *testing.T) {
 // A repo named on the command line is kept without commits by the configured
 // emails, as in init. A scan folder is kept as a folder, so repos cloned into
 // it later are found; the repos it holds now are not copied into repos.
-func TestAddRepoAndScan(t *testing.T) {
+func TestAddRepoAndScanFolder(t *testing.T) {
 	gittest.Need(t)
 	doctorHome(t, homeFull, nil)
 	work := t.TempDir()
@@ -127,8 +127,8 @@ func TestAddRepoAndScan(t *testing.T) {
 		t.Fatalf("Add(scan) = %v\n%s", err, out.String())
 	}
 	cfg := loadConfig(t)
-	if !slices.Equal(cfg.Repos, []string{empty}) || !slices.Equal(cfg.Scan, []string{team}) {
-		t.Errorf("repos %q scan %q, want [%s] [%s]\n%s", cfg.Repos, cfg.Scan, empty, team, out.String())
+	if !slices.Equal(cfg.Repos, []string{empty}) || !slices.Equal(cfg.ScanFolders, []string{team}) {
+		t.Errorf("repos %q scan %q, want [%s] [%s]\n%s", cfg.Repos, cfg.ScanFolders, empty, team, out.String())
 	}
 	if got := out.String(); !strings.Contains(got, "found "+mine) || strings.Contains(got, "found "+theirs) {
 		t.Errorf("output does not show what the scan folder holds now:\n%s", got)
@@ -146,8 +146,8 @@ func TestAddRepoAndScan(t *testing.T) {
 	if got := out.String(); !strings.Contains(got, "have  "+team) || !strings.Contains(got, "nothing new") {
 		t.Errorf("second scan output does not report the listed folder and no change:\n%s", got)
 	}
-	if cfg := loadConfig(t); !slices.Equal(cfg.Scan, []string{team}) {
-		t.Errorf("scan after second add = %q, want [%s]", cfg.Scan, team)
+	if cfg := loadConfig(t); !slices.Equal(cfg.ScanFolders, []string{team}) {
+		t.Errorf("scan after second add = %q, want [%s]", cfg.ScanFolders, team)
 	}
 }
 
@@ -159,7 +159,7 @@ func TestRemoveRepoAndEmail(t *testing.T) {
 	doctorHome(t, homeFull, func(c *config.Config) {
 		c.Emails = []string{"me@work.example", "old@laptop.example"}
 		c.Repos = []string{gone, kept}
-		c.Scan = []string{gone, kept}
+		c.ScanFolders = []string{gone, kept}
 	})
 	_, secret := homeFiles(t)
 
@@ -173,8 +173,8 @@ func TestRemoveRepoAndEmail(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := loadConfig(t)
-	if !slices.Equal(cfg.Scan, []string{kept}) {
-		t.Errorf("scan %q, want [%s]", cfg.Scan, kept)
+	if !slices.Equal(cfg.ScanFolders, []string{kept}) {
+		t.Errorf("scan %q, want [%s]", cfg.ScanFolders, kept)
 	}
 	if !slices.Equal(cfg.Repos, []string{kept}) || !slices.Equal(cfg.Emails, []string{"me@work.example"}) {
 		t.Errorf("repos %q emails %q, want [%s] [me@work.example]", cfg.Repos, cfg.Emails, kept)
@@ -188,21 +188,21 @@ func TestRemoveRepoAndEmail(t *testing.T) {
 func TestConfigReport(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{
-		Version: 1,
-		Emails:  []string{"me@work.com", "alt@work.local"},
-		Repos:   []string{filepath.Join(tmp, "work", "api"), filepath.Join(tmp, "work", "web")},
-		Scan:    []string{filepath.Join(tmp, "clones"), filepath.Join(tmp, "oss")},
-		Mirror: config.Mirror{
+		Version:     1,
+		Emails:      []string{"me@work.com", "alt@work.local"},
+		Repos:       []string{filepath.Join(tmp, "work", "api"), filepath.Join(tmp, "work", "web")},
+		ScanFolders: []string{filepath.Join(tmp, "clones"), filepath.Join(tmp, "oss")},
+		Mirror: config.MirrorSettings{
 			Repo: testMirror, Remote: "https://github.com/" + testMirror + ".git",
 			Path: filepath.Join(tmp, "mirror.git"), Branch: "main", Visibility: "private",
 		},
-		Author:     config.Author{Name: testLogin, Email: testNoreply},
-		TimePolicy: ident.PolicyExact,
-		Identity:   ident.ModeAuthorDate,
+		MirrorAuthor: config.MirrorAuthor{Name: testLogin, Email: testNoreply},
+		TimePolicy:   ident.PolicyExact,
+		Identity:     ident.ModeAuthorDate,
 	}
 	var b bytes.Buffer
 	writeConfig(&b, filepath.Join(tmp, "config.json"), cfg)
-	cfg.Repos, cfg.Scan, cfg.Mirror.Repo, cfg.Mirror.Remote, cfg.IncludeGitHubRepos = nil, nil, "", "", true
+	cfg.Repos, cfg.ScanFolders, cfg.Mirror.Repo, cfg.Mirror.Remote, cfg.IncludeGitHubRepos = nil, nil, "", "", true
 	b.WriteString("---\n")
 	writeConfig(&b, filepath.Join(tmp, "config.json"), cfg)
 	golden(t, "config.golden", filepath.ToSlash(strings.ReplaceAll(b.String(), tmp, "$TMP")))

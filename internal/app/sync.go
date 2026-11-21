@@ -27,7 +27,7 @@ type PublishOptions struct {
 // SyncResult reports what a sync did.
 type SyncResult struct {
 	Desired  int
-	Existing int
+	Ledger   int
 	Added    int
 	Pushed   bool
 	NewRepos []RepoStat // repos a scan folder contributed for the first time
@@ -74,17 +74,17 @@ func Publish(cfg *config.Config, p *Plan, opt PublishOptions, log io.Writer) (*S
 		if p.FetchErr != nil {
 			return nil, fmt.Errorf("mirror fetch failed, nothing written: %w", p.FetchErr)
 		}
-		res := &SyncResult{Desired: len(p.Entries), Existing: p.Ledger, Added: len(p.New)}
+		res := &SyncResult{Desired: len(p.Entries), Ledger: p.Ledger, Added: len(p.New)}
 		if len(p.New) == 0 || opt.DryRun {
 			return res, nil
 		}
-		if _, err := p.mirror.Emit(p.tip, p.New, mirror.Author{Name: cfg.Author.Name, Email: cfg.Author.Email}); err != nil {
+		if _, err := p.clone.Emit(p.tip, p.New, mirror.Author{Name: cfg.MirrorAuthor.Name, Email: cfg.MirrorAuthor.Email}); err != nil {
 			return nil, err
 		}
-		if p.mirror.Remote == "" || opt.NoPush {
+		if p.clone.Remote == "" || opt.NoPush {
 			return res, nil
 		}
-		if err := p.mirror.Push(); err != nil {
+		if err := p.clone.Push(); err != nil {
 			fmt.Fprintf(log, "push rejected, refetching (attempt %d): %v\n", attempt+1, err)
 			continue
 		}

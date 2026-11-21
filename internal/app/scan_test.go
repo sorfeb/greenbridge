@@ -49,7 +49,7 @@ func TestScanFolderFindsLaterClones(t *testing.T) {
 	}
 	// Listed explicitly and found by the scan: counted once.
 	cfg.Repos = append(cfg.Repos, api+string(filepath.Separator))
-	cfg.Scan = []string{work, filepath.Join(tmp, "gone")}
+	cfg.ScanFolders = []string{work, filepath.Join(tmp, "gone")}
 
 	res, err := Sync(cfg, testSecret, SyncOptions{}, io.Discard)
 	if err != nil {
@@ -90,7 +90,7 @@ func TestScanFolderFindsLaterClones(t *testing.T) {
 // The new-repo line is the same in plan and sync, and plain text.
 func TestWriteNewRepos(t *testing.T) {
 	var b strings.Builder
-	WriteNewRepos(&b, []RepoStat{{Path: "/work/later", Matched: 3, Scan: "/work"}})
+	WriteNewRepos(&b, []RepoStat{{Path: "/work/later", Matched: 3, ScanFolder: "/work"}})
 	if want := "  new   /work/later (from scan folder /work)\n"; b.String() != want {
 		t.Errorf("got %q, want %q", b.String(), want)
 	}

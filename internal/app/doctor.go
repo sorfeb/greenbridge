@@ -134,7 +134,7 @@ func gather(gh ghx.GitHub) *facts {
 		}
 		f.repos = append(f.repos, rf)
 	}
-	for _, dir := range f.cfg.Scan {
+	for _, dir := range f.cfg.ScanFolders {
 		sf := scanFacts{path: dir}
 		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 			sf.missing = true
@@ -146,7 +146,7 @@ func gather(gh ghx.GitHub) *facts {
 	if f.accountErr != nil {
 		return f
 	}
-	if !strings.EqualFold(f.cfg.Author.Email, f.account.NoreplyEmail) {
+	if !strings.EqualFold(f.cfg.MirrorAuthor.Email, f.account.NoreplyEmail) {
 		f.emails, f.emailsErr = gh.Emails()
 	}
 	if f.cfg.Mirror.Repo != "" {
@@ -312,7 +312,7 @@ func checkAuthorEmail(f *facts) result {
 	case f.accountErr != nil:
 		return skipped(check, "gh")
 	}
-	email, u := f.cfg.Author.Email, f.account
+	email, u := f.cfg.MirrorAuthor.Email, f.account
 	if strings.EqualFold(email, u.NoreplyEmail) {
 		return ok(check, "author email is this account's noreply address")
 	}
