@@ -24,11 +24,21 @@ func Pick(day time.Time) (Bridge, uint32) {
 type mulberry uint32
 
 func (m *mulberry) next() float64 {
+	return float64(m.u32()) / 4294967296
+}
+
+func (m *mulberry) u32() uint32 {
 	*m += 0x6D2B79F5
 	a := uint32(*m)
 	t := (a ^ a>>15) * (1 | a)
 	t = (t + (t^t>>7)*(61|t)) ^ t
-	return float64(t^t>>14) / 4294967296
+	return t ^ t>>14
+}
+
+// intn returns an int in [0, n) in integer maths: the draw int(next()*n)
+// makes, with no float rounding to differ between platforms.
+func (m *mulberry) intn(n uint32) int {
+	return int(uint64(m.u32()) * uint64(n) >> 32)
 }
 
 // busy returns a green level 1-4 per pixel. Columns are weeks with their own
