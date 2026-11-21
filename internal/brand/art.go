@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/png"
 	"strings"
+	"time"
 )
 
 //go:generate go run ./genart
@@ -121,8 +122,8 @@ var xmlEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`,
 // socialBg is GitHub's dark canvas.
 const socialBg = "#0d1117"
 
-// socialPNG is GitHub's 1280x640 social preview: the dark hero over a faint
-// ASCII haze on GitHub's dark canvas.
+// socialPNG is GitHub's 1280x640 social preview: the dark hero over a
+// mirror ledger on GitHub's dark canvas.
 func socialPNG() []byte {
 	const w, h, size = 1280, 640, 12
 	img := socialImage(w, h, size)
@@ -137,7 +138,7 @@ func socialImage(w, h, size int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	ox, oy := (w-heroW*size)/2, (h-heroH*size)/2
 	cells := hero(themePalette(true))
-	haze(img, newCoverage(w, h, cells, size, ox, oy))
+	drawLedger(img, newCoverage(w, h, cells, size, ox, oy))
 	for _, c := range cells {
 		sq := c.span*size - c.span*size/5
 		col := hexColor(c.color)
@@ -154,126 +155,183 @@ func socialImage(w, h, size int) *image.RGBA {
 	return img
 }
 
-// The haze behind the social hero: faint glyphs from a density ramp over a
-// soft wash, densest in a glow under the deck and fading to bare corners,
-// under CRT scanlines. Amounts are integers with 256 as 1.0, so every
-// platform draws the same pixels (arm64 may fuse float maths into FMA).
+// The background of the social preview is a mirror ledger: rows of
+// "gb/1 <id>  <time>", the whole payload of a mirror commit, with synthetic
+// values drawn from artSeed. A dark halo follows the hero: nothing within
+// ledgerHaloHard px of a hero square, full strength past ledgerHaloSoft.
+// Amounts are integers with 256 as 1.0, so every platform draws the same
+// pixels (arm64 may fuse float maths into FMA).
 const (
-	hazeRamp             = " .'-:=+*#%"
-	hazeTint             = "#5f9a6e"
-	hazeCellW, hazeCellH = 8, 12
-	hazeGlyph            = 60 // glyph opacity at full haze: dimmer than the dimmest green even then
-	hazeWash             = 20 // wash opacity at full haze
-	hazeClear            = 3  // px left bare around each hero square
-	hazeSoft             = 22 // radius px over which nearby hero squares fade the glyphs
-	scanEvery, scanDark  = 3, 77
+	ledgerCellW, ledgerCellH       = 12, 18
+	ledgerScale                    = 2 // device px per glyph pixel
+	ledgerHaloHard, ledgerHaloSoft = 16, 48
+	ledgerPrefix                   = "gb/1"
+	ledgerMuted                    = "#8b949e"
+	ledgerPrefixA, ledgerIDA       = 87, 159 // opacity of the prefix and the id
+	ledgerTimeA                    = 113     // opacity of the timestamp
+	ledgerTime                     = "2006-01-02 15:04"
 )
 
-// asciiGlyphs is a 5x7 pixel face for the haze ramp.
-var asciiGlyphs = map[byte][7]string{
-	'.':  {".....", ".....", ".....", ".....", ".....", "..#..", "....."},
-	'\'': {"..#..", "..#..", ".....", ".....", ".....", ".....", "....."},
-	'-':  {".....", ".....", ".....", ".###.", ".....", ".....", "....."},
-	':':  {".....", "..#..", ".....", ".....", ".....", "..#..", "....."},
-	'=':  {".....", ".....", "#####", ".....", "#####", ".....", "....."},
-	'+':  {".....", "..#..", "..#..", "#####", "..#..", "..#..", "....."},
-	'*':  {".....", "#.#.#", ".###.", "#####", ".###.", "#.#.#", "....."},
-	'#':  {".#.#.", ".#.#.", "#####", ".#.#.", "#####", ".#.#.", ".#.#."},
-	'%':  {"##..#", "##..#", "...#.", "..#..", ".#...", "#..##", "#..##"},
+// ledgerEpoch is the synthetic ledger's first timestamp.
+var ledgerEpoch = time.Date(2026, 9, 2, 8, 41, 0, 0, time.UTC)
+
+// ledgerEntry is one synthetic mirror commit: an id, a time, and a strength
+// k/256 that varies its opacity so the ledger does not read as a flat block.
+type ledgerEntry struct {
+	id string
+	at time.Time
+	k  int
 }
 
-func haze(img *image.RGBA, hero coverage) {
-	w, h := img.Bounds().Dx(), img.Bounds().Dy()
-	bg, tint := hexColor(socialBg), hexColor(hazeTint)
-	field := hazeField(w, h)
-	for y := range h {
-		for x := range w {
-			img.SetRGBA(x, y, mix(bg, tint, hazeWash*field(x, y)/256))
+func (e ledgerEntry) String() string {
+	return ledgerPrefix + " " + e.id + "  " + e.at.Format(ledgerTime)
+}
+
+// ledgerEntries draws n entries from seed alone, minutes apart and in order.
+func ledgerEntries(seed uint32, n int) []ledgerEntry {
+	const hex = "0123456789abcdef"
+	r := mulberry(seed)
+	at := ledgerEpoch
+	out := make([]ledgerEntry, n)
+	for i := range out {
+		k := 205 + r.intn(52)
+		id := make([]byte, 12)
+		for j := range id {
+			id[j] = hex[r.intn(16)]
+		}
+		at = at.Add(time.Duration(4+r.intn(187)) * time.Minute)
+		out[i] = ledgerEntry{string(id), at, k}
+	}
+	return out
+}
+
+// ledgerCap is how many entries a cols by rows ledger uses at most.
+func ledgerCap(cols, rows int) int {
+	return rows * (cols/len(ledgerEntry{}.String()+"   ") + 2)
+}
+
+// ledgerCell is one character of the ledger: a rune (0 for none), its colour,
+// and its opacity at full strength.
+type ledgerCell struct {
+	ch    rune
+	color string
+	alpha int
+}
+
+// ledger lays entries out row by row, each row starting part-way into an
+// entry so the columns bleed off both edges.
+func ledger(cols, rows int, es []ledgerEntry) [][]ledgerCell {
+	g := make([][]ledgerCell, rows)
+	put := func(x, y int, s, color string, alpha int) int {
+		for _, r := range s {
+			if x >= 0 && x < cols && r != ' ' {
+				g[y][x] = ledgerCell{r, color, alpha}
+			}
+			x++
+		}
+		return x
+	}
+	next := 0
+	green := themePalette(true).green[3]
+	for y := range g {
+		g[y] = make([]ledgerCell, cols)
+		for x := -9; x < cols; next++ {
+			e := es[next]
+			x = put(x, y, ledgerPrefix, ledgerMuted, ledgerPrefixA*e.k/256) + 1
+			x = put(x, y, e.id, green, ledgerIDA*e.k/256) + 2
+			x = put(x, y, e.at.Format(ledgerTime), ledgerMuted, ledgerTimeA*e.k/256) + 3
 		}
 	}
-	cols, rows := w/hazeCellW, h/hazeCellH
-	padX, padY := (w-cols*hazeCellW)/2, (h-rows*hazeCellH)/2
-	jitter := mulberry(artSeed + 2)
-	for cy := range rows {
-		for cx := range cols {
-			x0, y0 := padX+cx*hazeCellW, padY+cy*hazeCellH
-			mx, my := x0+hazeCellW/2, y0+hazeCellH/2
-			f := field(mx, my)
-			// Jitter of up to 0.7 of a ramp step breaks up the contour lines.
-			j := int(jitter.next()*358) - 179
-			ch := hazeRamp[max(0, min(len(hazeRamp)-1, (f*(len(hazeRamp)-1)+j+128)>>8))]
-			if ch == ' ' {
+	return g
+}
+
+// ledgerFont is a 5x8 face for the ledger: rows 0-6 down to the baseline,
+// row 7 the descender of g. Lowercase letters sit on rows 2-6 and g drops
+// below the baseline, so it cannot pass for a 9 even at the 400x200 unfurl.
+const ledgerBaseline = 6
+
+var ledgerFont = map[rune][8]string{
+	'0': {".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###.", "....."},
+	'1': {"..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###.", "....."},
+	'2': {".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####", "....."},
+	'3': {"#####", "...#.", "..#..", "...#.", "....#", "#...#", ".###.", "....."},
+	'4': {"...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#.", "....."},
+	'5': {"#####", "#....", "####.", "....#", "....#", "#...#", ".###.", "....."},
+	'6': {"..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###.", "....."},
+	'7': {"#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#...", "....."},
+	'8': {".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###.", "....."},
+	'9': {".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##..", "....."},
+	'a': {".....", ".....", ".###.", "....#", ".####", "#...#", ".####", "....."},
+	'b': {"#....", "#....", "####.", "#...#", "#...#", "#...#", "####.", "....."},
+	'c': {".....", ".....", ".###.", "#....", "#....", "#...#", ".###.", "....."},
+	'd': {"....#", "....#", ".####", "#...#", "#...#", "#...#", ".####", "....."},
+	'e': {".....", ".....", ".###.", "#...#", "#####", "#....", ".###.", "....."},
+	'f': {"..##.", ".#..#", ".#...", "###..", ".#...", ".#...", ".#...", "....."},
+	'g': {".....", ".....", ".####", "#...#", "#...#", ".####", "....#", "####."},
+	'/': {"....#", "....#", "...#.", "..#..", ".#...", "#....", "#....", "....."},
+	'-': {".....", ".....", ".....", ".###.", ".....", ".....", ".....", "....."},
+	':': {".....", ".##..", ".##..", ".....", ".##..", ".##..", ".....", "....."},
+}
+
+// drawLedger draws the ledger over GitHub's dark canvas, fading each cell by
+// its distance to the hero.
+func drawLedger(img *image.RGBA, hero coverage) {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	bg := hexColor(socialBg)
+	for y := range h {
+		for x := range w {
+			img.SetRGBA(x, y, bg)
+		}
+	}
+	cols, rows := w/ledgerCellW, h/ledgerCellH
+	padX, padY := (w-cols*ledgerCellW)/2, (h-rows*ledgerCellH)/2
+	g := ledger(cols, rows, ledgerEntries(artSeed, ledgerCap(cols, rows)))
+	// halo returns 0-256: 0 within the hard radius of the hero, easing up to
+	// 256 at the soft radius.
+	halo := func(x0, y0, x1, y1 int) int {
+		for d := 0; d <= ledgerHaloSoft; d += 2 {
+			if hero.count(x0-d, y0-d, x1+d, y1+d) > 0 {
+				if d < ledgerHaloHard {
+					return 0
+				}
+				t := (d - ledgerHaloHard) * 256 / (ledgerHaloSoft - ledgerHaloHard)
+				return t * t * (768 - 2*t) >> 16
+			}
+		}
+		return 256
+	}
+	const gw, gh = 5 * ledgerScale, 7 * ledgerScale
+	for cy, row := range g {
+		for cx, c := range row {
+			if c.ch == 0 {
 				continue
 			}
-			const r = hazeSoft
-			near := min(256, hero.count(mx-r, my-r, mx+r, my+r)*640/(4*r*r))
-			a := hazeGlyph * (64 + 3*f/4) / 256 * (256 - near*115/256) / 256
-			gx, gy := x0+(hazeCellW-5)/2, y0+(hazeCellH-7)/2
-			for py, row := range asciiGlyphs[ch] {
-				for px, on := range row {
-					x, y := gx+px, gy+py
-					if on != '#' || hero.count(x-hazeClear, y-hazeClear, x+hazeClear+1, y+hazeClear+1) > 0 {
+			x0, y0 := padX+cx*ledgerCellW, padY+cy*ledgerCellH
+			a := c.alpha * halo(x0, y0, x0+ledgerCellW, y0+ledgerCellH) / 256
+			if a == 0 {
+				continue
+			}
+			glyph, ok := ledgerFont[c.ch]
+			if !ok {
+				panic(fmt.Sprintf("no ledger glyph for %q", c.ch)) // the ledger's alphabet is fixed in this file
+			}
+			col := hexColor(c.color)
+			gx, gy := x0+(ledgerCellW-gw)/2, y0+(ledgerCellH-gh)/2
+			for py, line := range glyph {
+				for px, on := range line {
+					if on != '#' {
 						continue
 					}
-					img.SetRGBA(x, y, mix(img.RGBAAt(x, y), tint, a))
+					for sy := range ledgerScale {
+						for sx := range ledgerScale {
+							x, y := gx+px*ledgerScale+sx, gy+py*ledgerScale+sy
+							img.SetRGBA(x, y, mix(img.RGBAAt(x, y), col, a))
+						}
+					}
 				}
 			}
 		}
 	}
-	black := color.RGBA{A: 0xff}
-	for y := 0; y < h; y += scanEvery {
-		for x := range w {
-			img.SetRGBA(x, y, mix(img.RGBAAt(x, y), black, scanDark))
-		}
-	}
-}
-
-// hazeField returns the haze amount, 0-256, at a pixel: a base level, a glow
-// centred under the deck, and noise clouds, faded toward the corners.
-func hazeField(w, h int) func(x, y int) int {
-	coarse := newValueNoise(w, h, 120, artSeed)
-	fine := newValueNoise(w, h, 48, artSeed+1)
-	return func(x, y int) int {
-		n := (3*coarse.at(x, y) + 2*fine.at(x, y)) / 5
-		// The glow falls off as (1-q)^2 over an ellipse, close to a gaussian.
-		const rx, ry = 1100, 450
-		dx, dy := x-w/2, y-h*6/10
-		q := min(256, dx*dx*256/(rx*rx)+dy*dy*256/(ry*ry))
-		glow := (256 - q) * (256 - q) / 256
-		f := max(0, min(256, 77+glow*115/256+(n-128)*179/256))
-		du, dv := (2*x-w)*256/w, (2*y-h)*256/h
-		vignette := max(0, 256-(du*du+dv*dv)/512*333/256)
-		return f * vignette / 256
-	}
-}
-
-// valueNoise is smooth noise: random values 0-255 on a lattice scale px
-// apart, eased between.
-type valueNoise struct {
-	scale int
-	lat   [][]int
-}
-
-func newValueNoise(w, h, scale int, seed uint32) valueNoise {
-	r := mulberry(seed)
-	lat := make([][]int, h/scale+2)
-	for j := range lat {
-		lat[j] = make([]int, w/scale+2)
-		for i := range lat[j] {
-			lat[j][i] = int(r.next() * 256)
-		}
-	}
-	return valueNoise{scale, lat}
-}
-
-func (n valueNoise) at(x, y int) int {
-	fx, fy := x*256/n.scale, y*256/n.scale
-	i, j := fx>>8, fy>>8
-	ease := func(t int) int { return t * t * (768 - 2*t) >> 16 }
-	sx, sy := ease(fx&255), ease(fy&255)
-	top := n.lat[j][i]*(256-sx) + n.lat[j][i+1]*sx
-	bottom := n.lat[j+1][i]*(256-sx) + n.lat[j+1][i+1]*sx
-	return (top*(256-sy) + bottom*sy) >> 16
 }
 
 // coverage counts hero pixels in any rectangle in constant time.
