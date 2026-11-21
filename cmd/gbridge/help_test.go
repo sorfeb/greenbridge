@@ -33,7 +33,7 @@ func golden(t *testing.T, name, got string) {
 // -h on a command without flags prints that command's help instead of
 // reaching the command, which would read "--help" as a value.
 func TestHelpFlag(t *testing.T) {
-	for _, name := range []string{"add", "remove", "config"} {
+	for _, name := range []string{"add", "remove", "config", "hook"} {
 		for _, h := range []string{"-h", "--help", "-help"} {
 			var b bytes.Buffer
 			if !printHelp(&b, name, []string{h}) {

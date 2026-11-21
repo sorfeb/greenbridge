@@ -171,6 +171,7 @@ func diagnose(gh ghx.GitHub) []result {
 	rs := []result{checkGit(f), checkConfig(f), checkSecret(f)}
 	rs = append(rs, checkRepos(f)...)
 	rs = append(rs, checkEmails(f)...)
+	rs = append(rs, checkHook(gatherHooks(f.cfg))...)
 	return append(rs,
 		checkGH(f),
 		checkAuthorEmail(f),

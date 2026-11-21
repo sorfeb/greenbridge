@@ -1,0 +1,8 @@
+Usage:
+  gbridge hook install             start a background sync on every git push from this machine (Git 2.54+)
+  gbridge hook install --per-repo  for older Git: write a pre-push hook into each source repo's .git/hooks
+  gbridge hook uninstall           remove the push hook from global git config and every source repo
+  gbridge hook status              show the push hook, the source repos it covers, and the last background sync
+
+No repo's tracked files change. Leave one repo out: git config hook.gbridge.enabled false
+Background sync output goes to sync.log in the greenbridge home.

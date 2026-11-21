@@ -72,6 +72,16 @@ _Avoid_: author (alone), committer
 A square on your GitHub contribution graph. GitHub alone decides whether a mirror commit becomes one.
 _Avoid_: activity, square (in code)
 
+## Automation
+
+**Push hook**:
+The pre-push hook that starts a background sync on every git push from this machine: in global git config on Git 2.54 and later, else a script in each source repo's `.git/hooks`. It never fails or slows the push, and changes no tracked file.
+_Avoid_: git hook (alone), trigger, shim
+
+**Background sync**:
+A sync started by the push hook or `gbridge sync --detach`, detached from the terminal, that writes its output and one result line to `sync.log` in the greenbridge home. One runs at a time.
+_Avoid_: detached sync, async sync, daemon
+
 ## Diagnosis
 
 **Doctor check**:

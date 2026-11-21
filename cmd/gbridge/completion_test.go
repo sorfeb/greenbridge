@@ -69,7 +69,7 @@ func TestBashCompletion(t *testing.T) {
 		{[]string{"gbridge", "c"}, []string{"completion", "config"}},
 		{[]string{"gbridge", "init", "--sc"}, []string{"--scan"}},
 		{[]string{"gbridge", "plan", "--"}, []string{"--fetch", "--offline", "--since", "--weeks"}},
-		{[]string{"gbridge", "backfill", "--d"}, []string{"--dry-run"}},
+		{[]string{"gbridge", "backfill", "--d"}, []string{"--detach", "--dry-run"}},
 		{[]string{"gbridge", "completion", "p"}, []string{"powershell"}},
 		{[]string{"gbridge", "init", "--scan", "su"}, []string{"sub"}}, // directories only, not sum.txt
 		{[]string{"gbridge", "init", "--email", ""}, nil},              // a value, nothing to offer
