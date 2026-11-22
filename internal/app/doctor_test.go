@@ -78,10 +78,19 @@ func TestDiagnose(t *testing.T) {
 		home homeState
 		cfg  func(*config.Config) // nil: healthy config
 		gh   func(*ghx.Fake)      // nil: healthy GitHub
+		opt  DoctorOptions
 		want map[string]status
 	}{
 		{
 			name: "healthy",
+			want: map[string]status{
+				"config": statusOK, "secret": statusOK, "emails": statusOK, "remotes": statusSkipped, "gh": statusOK,
+				"author email": statusOK, "mirror": statusOK, "mirror branch": statusOK, "private contributions": statusUnverified,
+			},
+		},
+		{
+			name: "healthy online",
+			opt:  DoctorOptions{Online: true},
 			want: map[string]status{
 				"config": statusOK, "secret": statusOK, "emails": statusOK, "remotes": statusOK, "gh": statusOK,
 				"author email": statusOK, "mirror": statusOK, "mirror branch": statusOK, "private contributions": statusUnverified,
@@ -188,7 +197,7 @@ func TestDiagnose(t *testing.T) {
 				tc.gh(gh)
 			}
 			got := map[string]result{}
-			for _, r := range diagnose(gh) {
+			for _, r := range diagnose(gh, tc.opt) {
 				if _, dup := got[r.check]; !dup {
 					got[r.check] = r
 				}
@@ -214,7 +223,7 @@ func TestDoctorNamesInitOnce(t *testing.T) {
 
 	doctorHome(t, homeEmpty, nil)
 	var out bytes.Buffer
-	Doctor(&out, gh)
+	Doctor(&out, gh, DoctorOptions{})
 	if !strings.Contains(out.String(), "no config at") {
 		t.Fatalf("missing config not reported:\n%s", out.String())
 	}
@@ -224,7 +233,7 @@ func TestDoctorNamesInitOnce(t *testing.T) {
 
 	doctorHome(t, homeNoSecret, nil)
 	out.Reset()
-	Doctor(&out, gh)
+	Doctor(&out, gh, DoctorOptions{})
 	if !strings.Contains(out.String(), "no secret at") {
 		t.Fatalf("missing secret not reported:\n%s", out.String())
 	}
@@ -269,7 +278,7 @@ func TestDoctorFlagsUnlistedEmails(t *testing.T) {
 
 	doctorHome(t, homeFull, func(c *config.Config) { c.Repos = []string{repo} })
 	var warns []result
-	for _, r := range diagnose(healthyGitHub()) {
+	for _, r := range diagnose(healthyGitHub(), DoctorOptions{}) {
 		if r.check == "emails" {
 			warns = append(warns, r)
 		}
@@ -290,7 +299,7 @@ func TestDoctorFlagsUnlistedEmails(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	Doctor(&out, healthyGitHub())
+	Doctor(&out, healthyGitHub(), DoctorOptions{})
 	for _, leak := range []string{"coworker", "Coworker", "ancient", "t3code", "Me Dev", gittest.Message} {
 		if strings.Contains(out.String(), leak) {
 			t.Errorf("doctor output contains %q:\n%s", leak, out.String())
@@ -318,7 +327,7 @@ func TestDoctorNeverSuggestsSharedEmail(t *testing.T) {
 
 	doctorHome(t, homeFull, func(c *config.Config) { c.Repos = []string{repo} })
 	var got []result
-	for _, r := range diagnose(healthyGitHub()) {
+	for _, r := range diagnose(healthyGitHub(), DoctorOptions{}) {
 		if r.check == "emails" {
 			got = append(got, r)
 		}
@@ -337,7 +346,7 @@ func TestDoctorNeverSuggestsSharedEmail(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	Doctor(&out, healthyGitHub())
+	Doctor(&out, healthyGitHub(), DoctorOptions{})
 	for _, leak := range []string{"gbridge add email pair@work.example", "Pair Partner"} {
 		if strings.Contains(out.String(), leak) {
 			t.Errorf("doctor output contains %q:\n%s", leak, out.String())
@@ -345,9 +354,10 @@ func TestDoctorNeverSuggestsSharedEmail(t *testing.T) {
 	}
 }
 
-// Commits on a remote reach sync only through git fetch. Doctor compares
-// each tracked remote with the clone and names the fetch, or the broken
-// remote, to fix. How long ago the clone fetched does not matter.
+// Commits on a remote reach sync only through git fetch. Doctor --online
+// compares each tracked remote with the clone and names the fetch, or the
+// broken remote, to fix. How long ago the clone fetched does not matter.
+// Plain doctor stays offline: one skipped line points at --online.
 func TestDoctorChecksRemotes(t *testing.T) {
 	gittest.Need(t)
 	isolateGitConfig(t, "")
@@ -365,12 +375,20 @@ func TestDoctorChecksRemotes(t *testing.T) {
 	gittest.Git(t, behind, nil, "remote", "add", "leftover", gone)
 	doctorHome(t, homeFull, func(c *config.Config) { c.Repos = []string{behind, current} })
 
-	var got []result
-	for _, r := range diagnose(healthyGitHub()) {
-		if r.check == "remotes" {
-			got = append(got, r)
+	remotes := func(opt DoctorOptions) []result {
+		var got []result
+		for _, r := range diagnose(healthyGitHub(), opt) {
+			if r.check == "remotes" {
+				got = append(got, r)
+			}
 		}
+		return got
 	}
+	offline := []result{{"remotes", statusSkipped, "remotes not checked, needs gbridge doctor --online", ""}}
+	if got := remotes(DoctorOptions{}); !slices.Equal(got, offline) {
+		t.Errorf("offline remotes results:\n got  %+v\n want %+v", got, offline)
+	}
+	got := remotes(DoctorOptions{Online: true})
 	want := []result{
 		{"remotes", statusWarn, "1 branch on origin has commits you haven't fetched: " + behind, "git -C " + behind + " fetch origin"},
 		{"remotes", statusWarn, "can't reach dev-vm: " + current, "git -C " + current + " remote remove dev-vm, or fix its URL: git -C " + current + " remote set-url dev-vm <url>"},
@@ -381,7 +399,7 @@ func TestDoctorChecksRemotes(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	Doctor(&out, healthyGitHub())
+	Doctor(&out, healthyGitHub(), DoctorOptions{Online: true})
 	if !strings.Contains(out.String(), "fix: git -C "+behind+" fetch origin") {
 		t.Errorf("doctor output lacks the fix line:\n%s", out.String())
 	}
@@ -391,13 +409,13 @@ func TestDoctorChecksRemotes(t *testing.T) {
 // share one unverified line and never a fix that removes them.
 func TestCheckRemotesSlow(t *testing.T) {
 	late := fmt.Errorf("listing origin: %w", context.DeadlineExceeded)
-	f := &facts{cfg: &config.Config{}, repos: []repoFacts{
+	f := &facts{cfg: &config.Config{}, online: true, repos: []repoFacts{
 		{path: "a", remotes: []source.Remote{{Name: "origin", Err: late}, {Name: "vm"}}},
 		{path: "b", remotes: []source.Remote{{Name: "origin", Err: late}}},
 	}}
 	want := []result{
 		{"remotes", statusOK, "1 tracked remote checked, nothing left to fetch", ""},
-		{"remotes", statusUnverified, "2 tracked remotes gave no answer within 15s, not checked", "run gbridge doctor again, or git fetch in those repos"},
+		{"remotes", statusUnverified, "2 tracked remotes gave no answer within 15s, not checked", "run gbridge doctor --online again, or git fetch in those repos"},
 	}
 	if got := checkRemotes(f); !slices.Equal(got, want) {
 		t.Errorf("checkRemotes:\n got  %+v\n want %+v", got, want)
@@ -407,7 +425,7 @@ func TestCheckRemotesSlow(t *testing.T) {
 func TestDoctorPrintsSkipped(t *testing.T) {
 	doctorHome(t, homeFull, nil)
 	var out bytes.Buffer
-	fails := Doctor(&out, &ghx.Fake{Err: ghx.ErrNotInstalled})
+	fails := Doctor(&out, &ghx.Fake{Err: ghx.ErrNotInstalled}, DoctorOptions{})
 	if fails != 1 {
 		t.Errorf("Doctor() = %d failures, want 1 (gh only; skipped checks are not failures)\n%s", fails, out.String())
 	}

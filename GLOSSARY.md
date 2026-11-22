@@ -87,3 +87,11 @@ _Avoid_: detached sync, async sync, daemon
 **Doctor check**:
 One independent precondition for contributions to appear, reported by `gbridge doctor` as ok, warn, unverified, failed, or skipped.
 _Avoid_: test, probe, validation
+
+**Online check**:
+A doctor check that waits on the network beyond GitHub's API, run only by `gbridge doctor --online`. Plain `gbridge doctor` reports it skipped and stays fast.
+_Avoid_: network check, slow check
+
+**Tracked remote**:
+`origin`, or a remote a local branch of a source repo tracks. Its new commits reach sync only through `git fetch`. A remote no branch tracks is left out.
+_Avoid_: upstream, stale remote
