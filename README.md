@@ -80,8 +80,11 @@ Back up your recovery phrase with `gbridge secret`: losing it means the next syn
 Requires `git` and the [GitHub CLI](https://cli.github.com) logged in (`gh auth login`).
 
 ```sh
-mise use -g github:sorfeb/greenbridge                          # mise (requires v0.1.0+)
-go install github.com/sorfeb/greenbridge/cmd/gbridge@latest    # Go 1.27+
+scoop bucket add sorfeb https://github.com/sorfeb/scoop-bucket  # Windows, Scoop
+scoop install sorfeb/gbridge
+brew install sorfeb/tap/gbridge                                 # macOS or Linux, Homebrew
+mise use -g github:sorfeb/greenbridge                           # mise
+go install github.com/sorfeb/greenbridge/cmd/gbridge@latest     # Go 1.27+
 ```
 
 Or download a platform archive from [Releases](https://github.com/sorfeb/greenbridge/releases) and put `gbridge` on your `PATH`. The binary is named `gbridge` (not `gb`, which oh-my-zsh/prezto alias to `git branch`).
@@ -101,7 +104,7 @@ gh attestation verify gbridge_<version>_linux_amd64.tar.gz --repo sorfeb/greenbr
 - **macOS:** `xattr -d com.apple.quarantine gbridge` (or **System Settings > Privacy & Security > Open Anyway**).
 - **Windows:** SmartScreen -> **More info** -> **Run anyway**.
 
-`go install` and `mise` builds don't trigger these prompts.
+Homebrew removes the macOS quarantine flag on install. `go install` and `mise` builds don't trigger these prompts.
 
 </details>
 
@@ -114,6 +117,7 @@ gbridge init --email you@work.com --scan ~/work   # create private greenbridge-a
 gbridge plan                                      # preview, writes nothing
 gbridge sync                                      # mirror and push; rerun any time
 gbridge doctor                                    # explain missing squares
+gbridge hook install                              # sync in the background on every git push
 ```
 
 | Command | Does | Key flags |
@@ -122,9 +126,10 @@ gbridge doctor                                    # explain missing squares
 | `gbridge add` / `remove` | Edit `email`, `repo`, or `scan` in config without touching secret/mirror | `gbridge add scan ~/work` |
 | `gbridge config` | Print current setup (never prints secret) | |
 | `gbridge plan` | Preview counts per year and a terminal graph | `--since YYYY-MM-DD`, `--offline` |
-| `gbridge sync` | Mirror missing commits and push (~0.5 s local, 3–6 s with GitHub) | `--since`, `--dry-run`, `--no-push` |
+| `gbridge sync` | Mirror missing commits and push (~0.5 s local, 3–6 s with GitHub) | `--since`, `--dry-run`, `--no-push`, `--detach` |
 | `gbridge backfill` | Alias for `sync` | `--since` |
 | `gbridge doctor` | Verify GitHub's contribution rules and suggest unconfigured emails | |
+| `gbridge hook` | `install`, `uninstall`, or `status` of the push hook | `install --per-repo` (Git before 2.54) |
 | `gbridge secret` | Print recovery phrase for a second machine | |
 | `gbridge completion` | Print tab-completion script | `bash`, `zsh`, `fish`, `powershell` |
 
@@ -133,6 +138,15 @@ gbridge doctor                                    # explain missing squares
 - **Override config dir:** Set `GBRIDGE_HOME`.
 
 ## Guides
+
+### Sync on every push
+
+```sh
+gbridge hook install    # Git 2.54+: once, in global git config
+gbridge hook status     # source repos covered, last background sync
+```
+
+Every `git push` from a source repo starts a background sync. The push hook never fails or slows the push, and no repo's tracked files change. Output goes to `sync.log` in the greenbridge home. Leave one repo out with `git config hook.gbridge.enabled false` in it. On Git before 2.54, `gbridge hook install --per-repo` writes a pre-push hook into each source repo's `.git/hooks`.
 
 ### Work on a remote dev box
 
@@ -178,7 +192,7 @@ A commit is mirrored when: its author email is configured, it is reachable from 
 | Date used | Author date, commit's time zone | Same |
 | PRs, issues, reviews | Counted | Not mirrored (not in git history) |
 
-**Limitations:** Clones only (`git fetch --all` first) · Sync is append-only (removal requires rebuilding + force-pushing the mirror) · One mirror per config · Two commits by one email in the exact same second collapse to one ID · No automatic pre-push hook yet.
+**Limitations:** Clones only (`git fetch --all` first) · Sync is append-only (removal requires rebuilding + force-pushing the mirror) · One mirror per config · Two commits by one email in the exact same second collapse to one ID.
 
 ## Alternatives
 
