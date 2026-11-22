@@ -96,15 +96,15 @@ func noPromptEnv(getenv func(string) string, sshConfigured bool) []string {
 	return env
 }
 
-// localRefs maps every ref in repo to the commit it names.
+// localRefs maps every ref in repo to the commit it names, streamed: a repo
+// with many tags never holds git's whole output at once.
 func localRefs(repo string) (map[string]string, error) {
-	out, err := gitx.Git(repo, "for-each-ref", "--format=%(objectname) %(refname)")
-	if err != nil {
-		return nil, err
-	}
 	refs := map[string]string{}
-	for line := range strings.SplitSeq(out, "\n") {
-		if sha, ref, ok := strings.Cut(strings.TrimRight(line, "\r"), " "); ok {
+	for line, err := range gitx.Lines(repo, "for-each-ref", "--format=%(objectname) %(refname)") {
+		if err != nil {
+			return nil, err
+		}
+		if sha, ref, ok := strings.Cut(line, " "); ok {
 			refs[ref] = sha
 		}
 	}
