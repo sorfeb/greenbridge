@@ -100,7 +100,7 @@ var commands = []command{
 	{name: "plan", summary: "preview what would be mirrored (writes nothing)", flags: func() *flag.FlagSet { return new(planFlags).set() }},
 	{name: "sync", summary: "mirror new activity and push", flags: func() *flag.FlagSet { return new(syncFlags).set("sync") }},
 	{name: "backfill", summary: "alias for sync; use --since to limit history", flags: func() *flag.FlagSet { return new(syncFlags).set("backfill") }},
-	{name: "doctor", summary: "check every precondition for squares to appear"},
+	{name: "doctor", summary: "check every precondition for squares to appear", flags: func() *flag.FlagSet { return new(doctorFlags).set() }},
 	{
 		name: "hook", summary: "sync in the background on every git push: hook install|uninstall|status",
 		words: []string{"install", "uninstall", "status"},
@@ -202,9 +202,7 @@ func main() {
 	case "hook":
 		err = runHook(args)
 	case "doctor":
-		if app.Doctor(os.Stdout, ghx.NewCLI()) > 0 {
-			os.Exit(1)
-		}
+		runDoctor(args)
 	case "secret":
 		err = runSecret()
 	case "completion":
@@ -325,6 +323,22 @@ func runPlan(args []string) error {
 	}
 	p.Report(os.Stdout, time.Now(), f.weeks, brand.Paint(lipgloss.NewRenderer(os.Stdout)))
 	return nil
+}
+
+type doctorFlags struct{ o app.DoctorOptions }
+
+func (f *doctorFlags) set() *flag.FlagSet {
+	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+	fs.BoolVar(&f.o.Online, "online", false, "also run the online checks: compare tracked remotes with git ls-remote (up to 15s)")
+	return fs
+}
+
+func runDoctor(args []string) {
+	var f doctorFlags
+	_ = f.set().Parse(args)
+	if app.Doctor(os.Stdout, ghx.NewCLI(), f.o) > 0 {
+		os.Exit(1)
+	}
 }
 
 type syncFlags struct {

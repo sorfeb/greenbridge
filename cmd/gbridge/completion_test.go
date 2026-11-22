@@ -73,7 +73,7 @@ func TestBashCompletion(t *testing.T) {
 		{[]string{"gbridge", "completion", "p"}, []string{"powershell"}},
 		{[]string{"gbridge", "init", "--scan", "su"}, []string{"sub"}}, // directories only, not sum.txt
 		{[]string{"gbridge", "init", "--email", ""}, nil},              // a value, nothing to offer
-		{[]string{"gbridge", "doctor", "--"}, nil},
+		{[]string{"gbridge", "doctor", "--"}, []string{"--online"}},
 		{[]string{"gbridge", "add", ""}, []string{"email", "repo", "scan"}},
 		{[]string{"gbridge", "remove", "r"}, []string{"repo"}},
 		{[]string{"gbridge", "add", "email", ""}, nil}, // the kind is given

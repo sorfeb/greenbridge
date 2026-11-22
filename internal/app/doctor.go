@@ -2,6 +2,7 @@ package app
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sorfeb/greenbridge/internal/config"
@@ -28,7 +30,7 @@ const (
 	statusWarn
 	statusUnverified // nothing can confirm it; the user checks by hand
 	statusFail
-	statusSkipped // a prerequisite failed, so the check could not run
+	statusSkipped // a prerequisite failed, or --online was not given, so the check did not run
 )
 
 func (s status) String() string {
@@ -58,9 +60,19 @@ func skipped(check, needs string) result {
 	return result{check, statusSkipped, check + " not checked, needs " + needs, ""}
 }
 
+// DoctorOptions are the flags of gbridge doctor.
+type DoctorOptions struct {
+	// Online runs the online checks, which wait on the network: today the
+	// tracked remotes. Without it doctor reads only this machine and GitHub's
+	// API.
+	Online bool
+}
+
 // facts is everything doctor learns from the machine and GitHub, gathered
 // once before any check runs.
 type facts struct {
+	online bool
+
 	git    string
 	gitErr error
 
@@ -100,7 +112,19 @@ type repoFacts struct {
 	// is git's user.name in the repo, empty when unset.
 	authors  []source.Author
 	userName string
+
+	// remotes compares origin and tracked remotes with the repo. Only for
+	// repos sync reads.
+	remotes []source.Remote
 }
+
+// remoteTimeout bounds how long doctor waits for every remote together,
+// counted from the start. A remote that answers later is reported as not
+// checked: a slow forge is not a broken remote.
+const remoteTimeout = 15 * time.Second
+
+// remoteWorkers is how many repos list their remotes at once.
+const remoteWorkers = 8
 
 // emailWindow is how far back doctor looks for commits under unlisted
 // emails: the year the contribution graph shows.
@@ -132,18 +156,21 @@ func gatherRepos(cfg *config.Config) []repoFacts {
 	return rfs
 }
 
-func gather(gh ghx.GitHub) *facts {
-	f := &facts{}
+func gather(gh ghx.GitHub, opt DoctorOptions) *facts {
+	f := &facts{online: opt.Online}
 	f.git, f.gitErr = gitx.Git("", "--version")
 	f.cfgPath, _ = config.Path()
 	f.cfg, f.cfgErr = config.Load()
 	f.secretPath, _ = config.SecretPath()
 	_, f.secretErr = ident.Load(f.secretPath)
-	f.account, f.accountErr = gh.Account()
 	if f.cfgErr != nil {
+		f.account, f.accountErr = gh.Account()
 		return f
 	}
 	f.repos = gatherRepos(f.cfg)
+	if f.online {
+		defer gatherRemotes(f)()
+	}
 	for _, dir := range f.cfg.ScanFolders {
 		sf := scanFacts{path: dir}
 		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
@@ -153,6 +180,7 @@ func gather(gh ghx.GitHub) *facts {
 		}
 		f.scans = append(f.scans, sf)
 	}
+	f.account, f.accountErr = gh.Account()
 	if f.accountErr != nil {
 		return f
 	}
@@ -165,12 +193,43 @@ func gather(gh ghx.GitHub) *facts {
 	return f
 }
 
+// gatherRemotes compares the tracked remotes of every source repo sync reads
+// with the repo, in the background, and returns the wait for them. Doctor
+// asks GitHub meanwhile.
+func gatherRemotes(f *facts) (wait func()) {
+	ctx, cancel := context.WithTimeout(context.Background(), remoteTimeout)
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, remoteWorkers)
+	for i := range f.repos {
+		r := &f.repos[i]
+		if r.missing || r.notGit || (r.hasGitHub && !f.cfg.IncludeGitHubRepos) {
+			continue
+		}
+		wg.Go(func() { r.remotes = listRemotes(ctx, r.path, sem) })
+	}
+	return func() {
+		wg.Wait()
+		cancel()
+	}
+}
+
+// listRemotes compares repo's tracked remotes with the repo once a slot in
+// sem is free. A remote still unlisted when ctx ends carries its error.
+func listRemotes(ctx context.Context, repo string, sem chan struct{}) []source.Remote {
+	sem <- struct{}{}
+	defer func() { <-sem }()
+	// A repo git can't read was already judged by checkRepos.
+	rs, _ := source.CheckRemotes(ctx, repo)
+	return rs
+}
+
 // diagnose runs every check. Each reports, even when it cannot run.
-func diagnose(gh ghx.GitHub) []result {
-	f := gather(gh)
+func diagnose(gh ghx.GitHub, opt DoctorOptions) []result {
+	f := gather(gh, opt)
 	rs := []result{checkGit(f), checkConfig(f), checkSecret(f)}
 	rs = append(rs, checkRepos(f)...)
 	rs = append(rs, checkEmails(f)...)
+	rs = append(rs, checkRemotes(f)...)
 	rs = append(rs, checkHook(gatherHooks(f.cfg))...)
 	return append(rs,
 		checkGH(f),
@@ -298,6 +357,67 @@ func checkEmails(f *facts) []result {
 	return rs
 }
 
+// checkRemotes warns about tracked remotes holding commits the repo lacks,
+// and about remotes git can't reach. A remote with nothing new is fine
+// however long ago the repo fetched it. Remotes too slow to answer share
+// one line: a slow forge is not a broken remote. It is an online check.
+func checkRemotes(f *facts) []result {
+	const check = "remotes"
+	switch {
+	case f.cfgErr != nil:
+		return []result{skipped(check, "config")}
+	case !f.online:
+		return []result{skipped(check, "gbridge doctor --online")}
+	}
+	var rs []result
+	current, slow := 0, 0
+	for _, r := range f.repos {
+		p := shellPath(r.path)
+		for _, rem := range r.remotes {
+			switch {
+			case errors.Is(rem.Err, context.DeadlineExceeded):
+				slow++
+			case rem.Err != nil:
+				rs = append(rs, result{
+					check, statusWarn, "can't reach " + rem.Name + ": " + r.path,
+					"git -C " + p + " remote remove " + rem.Name + ", or fix its URL: git -C " + p + " remote set-url " + rem.Name + " <url>",
+				})
+			case rem.Unfetched > 0:
+				what := fmt.Sprintf("%d branches on %s have", rem.Unfetched, rem.Name)
+				if rem.Unfetched == 1 {
+					what = "1 branch on " + rem.Name + " has"
+				}
+				rs = append(rs, result{
+					check, statusWarn, what + " commits you haven't fetched: " + r.path,
+					"git -C " + p + " fetch " + rem.Name,
+				})
+			default:
+				current++
+			}
+		}
+	}
+	switch {
+	case current > 0:
+		rs = append(rs, ok(check, plural(current, "tracked remote")+" checked, nothing left to fetch"))
+	case len(rs) == 0 && slow == 0:
+		rs = append(rs, ok(check, "no source repo tracks a remote"))
+	}
+	if slow > 0 {
+		rs = append(rs, unverified(check,
+			fmt.Sprintf("%s gave no answer within %s, not checked", plural(slow, "tracked remote"), remoteTimeout),
+			"run gbridge doctor --online again, or git fetch in those repos"))
+	}
+	return rs
+}
+
+// shellPath quotes p for a fix line when it holds a space.
+func shellPath(p string) string {
+	if strings.ContainsAny(p, " \t") {
+		return `"` + p + `"`
+	}
+	return p
+}
+
 func plural(n int, noun string) string {
 	if n == 1 {
 		return "1 " + noun
@@ -393,9 +513,9 @@ func checkPrivateContrib(f *facts) result {
 
 // Doctor checks every precondition for squares to appear. It returns the
 // number of failures.
-func Doctor(w io.Writer, gh ghx.GitHub) int {
+func Doctor(w io.Writer, gh ghx.GitHub, opt DoctorOptions) int {
 	fails := 0
-	for _, r := range diagnose(gh) {
+	for _, r := range diagnose(gh, opt) {
 		fmt.Fprintf(w, "%-12s %s\n", r.status, r.msg)
 		switch r.status {
 		case statusFail:

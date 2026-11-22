@@ -4,20 +4,31 @@ package gitx
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Run executes git in dir (empty means current directory) with extra env
 // entries and optional stdin. Output has trailing newlines trimmed.
 func Run(dir string, env []string, stdin io.Reader, args ...string) (string, error) {
+	return RunContext(context.Background(), dir, env, stdin, args...)
+}
+
+// RunContext is Run that kills git when ctx ends. Output pipes held open by
+// a child such as ssh get a second to drain, so a kill never hangs.
+func RunContext(ctx context.Context, dir string, env []string, stdin io.Reader, args ...string) (string, error) {
 	if dir != "" {
 		args = append([]string{"-C", dir}, args...)
 	}
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if ctx.Done() != nil {
+		cmd.WaitDelay = time.Second
+	}
 	cmd.Env = append(os.Environ(), env...)
 	cmd.Stdin = stdin
 	var out, errb bytes.Buffer
