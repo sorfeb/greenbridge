@@ -47,7 +47,7 @@ func doctorHome(t *testing.T, state homeState, mutate func(*config.Config)) {
 		t.Fatal(err)
 	}
 	cfg.Emails = []string{"me@work.example"}
-	cfg.Author = config.Author{Name: testLogin, Email: testNoreply}
+	cfg.MirrorAuthor = config.MirrorAuthor{Name: testLogin, Email: testNoreply}
 	cfg.Mirror.Repo = testMirror
 	cfg.Mirror.Remote = "https://github.com/" + testMirror + ".git"
 	if mutate != nil {
@@ -133,19 +133,19 @@ func TestDiagnose(t *testing.T) {
 		},
 		{
 			name: "unverified email",
-			cfg:  func(c *config.Config) { c.Author.Email = "me@example.com" },
+			cfg:  func(c *config.Config) { c.MirrorAuthor.Email = "me@example.com" },
 			gh:   func(f *ghx.Fake) { f.Addresses = []ghx.Email{{Address: "Me@Example.com", Verified: false}} },
 			want: map[string]status{"author email": statusFail},
 		},
 		{
 			name: "verified email",
-			cfg:  func(c *config.Config) { c.Author.Email = "me@example.com" },
+			cfg:  func(c *config.Config) { c.MirrorAuthor.Email = "me@example.com" },
 			gh:   func(f *ghx.Fake) { f.Addresses = []ghx.Email{{Address: "Me@Example.com", Verified: true}} },
 			want: map[string]status{"author email": statusOK},
 		},
 		{
 			name: "email scope missing",
-			cfg:  func(c *config.Config) { c.Author.Email = "me@example.com" },
+			cfg:  func(c *config.Config) { c.MirrorAuthor.Email = "me@example.com" },
 			gh:   func(f *ghx.Fake) { f.EmailsErr = errors.New("needs the user scope") },
 			want: map[string]status{"author email": statusUnverified},
 		},
@@ -163,12 +163,12 @@ func TestDiagnose(t *testing.T) {
 		},
 		{
 			name: "scan folder missing",
-			cfg:  func(c *config.Config) { c.Scan = []string{filepath.Join(t.TempDir(), "gone")} },
+			cfg:  func(c *config.Config) { c.ScanFolders = []string{filepath.Join(t.TempDir(), "gone")} },
 			want: map[string]status{"repos": statusFail, "mirror": statusOK},
 		},
 		{
 			name: "scan folder only",
-			cfg:  func(c *config.Config) { c.Scan = []string{t.TempDir()} },
+			cfg:  func(c *config.Config) { c.ScanFolders = []string{t.TempDir()} },
 			want: map[string]status{"repos": statusOK},
 		},
 		{

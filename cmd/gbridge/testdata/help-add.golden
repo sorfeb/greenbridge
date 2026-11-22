@@ -1,0 +1,6 @@
+Usage:
+  gbridge add email <address>...  add work emails to match
+  gbridge add repo <path>...      add source repos
+  gbridge add scan <folder>...    add scan folders, searched for source repos on every plan and sync
+
+Changes only the config: the secret and the mirror repo stay as they are.

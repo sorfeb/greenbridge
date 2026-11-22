@@ -18,6 +18,7 @@ func (p *Plan) Report(w io.Writer, today time.Time, weeks int, paint brand.Paint
 			fmt.Fprintf(w, "  %5d  %s\n", r.Matched, r.Path)
 		}
 	}
+	WriteFetchFailed(w, p.FetchFailed())
 	WriteNewRepos(w, p.NewRepos())
 	fmt.Fprintf(w, "\n%d commits matched, %d after dedup", p.Matched, len(p.Entries))
 	if len(p.Entries) > 0 {
@@ -27,7 +28,9 @@ func (p *Plan) Report(w io.Writer, today time.Time, weeks int, paint brand.Paint
 	if p.FetchErr != nil {
 		fmt.Fprintf(w, "mirror fetch failed (%v); counts are from the last fetch\n", p.FetchErr)
 	}
-	fmt.Fprintf(w, "already in mirror: %d, would add: %d\n\n", p.Ledger, len(p.New))
+	fmt.Fprintf(w, "already in mirror: %d, would add: %d\n", p.Ledger, len(p.New))
+	WriteOrphans(w, p.Orphans)
+	fmt.Fprintln(w)
 	YearTable(w, p.Entries)
 	fmt.Fprintln(w)
 	Graph(w, p.Entries, weeks, today, paint)

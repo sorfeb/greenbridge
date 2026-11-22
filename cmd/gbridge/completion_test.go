@@ -68,12 +68,16 @@ func TestBashCompletion(t *testing.T) {
 		{[]string{"gbridge", "sy"}, []string{"sync"}},
 		{[]string{"gbridge", "c"}, []string{"completion", "config"}},
 		{[]string{"gbridge", "init", "--sc"}, []string{"--scan"}},
-		{[]string{"gbridge", "plan", "--"}, []string{"--offline", "--since", "--weeks"}},
-		{[]string{"gbridge", "backfill", "--d"}, []string{"--dry-run"}},
+		{[]string{"gbridge", "plan", "--"}, []string{"--fetch", "--offline", "--since", "--weeks"}},
+		{[]string{"gbridge", "backfill", "--d"}, []string{"--detach", "--dry-run"}},
 		{[]string{"gbridge", "completion", "p"}, []string{"powershell"}},
 		{[]string{"gbridge", "init", "--scan", "su"}, []string{"sub"}}, // directories only, not sum.txt
 		{[]string{"gbridge", "init", "--email", ""}, nil},              // a value, nothing to offer
 		{[]string{"gbridge", "doctor", "--"}, nil},
+		{[]string{"gbridge", "add", ""}, []string{"email", "repo", "scan"}},
+		{[]string{"gbridge", "remove", "r"}, []string{"repo"}},
+		{[]string{"gbridge", "add", "email", ""}, nil}, // the kind is given
+		{[]string{"gbridge", "completion", "zsh", ""}, nil},
 	}
 	for _, c := range cases {
 		cmd := exec.Command(bash, append([]string{
@@ -101,8 +105,10 @@ func TestPowerShellCompletion(t *testing.T) {
 	}{
 		{"gbridge sy", []string{"sync"}},
 		{"gbridge init --sc", []string{"--scan"}},
-		{"gbridge plan --", []string{"--offline", "--since", "--weeks"}},
+		{"gbridge plan --", []string{"--fetch", "--offline", "--since", "--weeks"}},
 		{"gbridge completion f", []string{"fish"}},
+		{"gbridge add r", []string{"repo"}},
+		{"gbridge remove s", []string{"scan"}},
 	}
 	var ps strings.Builder
 	ps.WriteString("$ErrorActionPreference = 'Stop'\nGet-Content -Raw '" + src + "' | Invoke-Expression\n")
@@ -123,6 +129,37 @@ func TestPowerShellCompletion(t *testing.T) {
 		slices.Sort(g)
 		if !slices.Equal(g, c.want) {
 			t.Errorf("%q: got %q, want %q", c.input, g, c.want)
+		}
+	}
+}
+
+func TestFishCompletion(t *testing.T) {
+	fish := shellPath(t, "fish")
+	src := script(t, "fish")
+	cases := []struct {
+		input string
+		want  []string
+	}{
+		{"gbridge sy", []string{"sync"}},
+		{"gbridge add ", []string{"email", "repo", "scan"}},
+		{"gbridge remove e", []string{"email"}},
+		{"gbridge add email ", nil}, // the kind is given
+		{"gbridge completion ", []string{"bash", "fish", "powershell", "zsh"}},
+		{"gbridge completion bash ", nil},
+		{"gbridge init --sca", []string{"--scan"}}, // fish matches fuzzily: --sc also finds --secret
+	}
+	for _, c := range cases {
+		out, err := exec.Command(fish, "--no-config", "-c", "source $argv[1]; complete -C $argv[2]",
+			src, c.input).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%q: %v\n%s", c.input, err, out)
+		}
+		var got []string
+		for _, l := range lines(string(out)) {
+			got = append(got, strings.Fields(l)[0])
+		}
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%q: got %q, want %q", c.input, got, c.want)
 		}
 	}
 }

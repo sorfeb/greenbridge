@@ -13,37 +13,38 @@ import (
 	"github.com/sorfeb/greenbridge/internal/ident"
 )
 
-// Mirror describes the activity repo that receives empty commits.
-type Mirror struct {
+// MirrorSettings name the mirror repo and where its mirror clone lives.
+type MirrorSettings struct {
 	Repo       string `json:"repo,omitempty"`   // owner/name on GitHub; empty for local only
 	Remote     string `json:"remote,omitempty"` // push URL; empty for local only
-	Path       string `json:"path"`             // local bare clone
+	Path       string `json:"path"`             // mirror clone
 	Branch     string `json:"branch"`
 	Visibility string `json:"visibility"` // private or public
 }
 
 // LocalOnly reports whether the mirror is never pushed. Sync keys on the same
 // field: no remote, no push.
-func (m Mirror) LocalOnly() bool { return m.Remote == "" }
+func (m MirrorSettings) LocalOnly() bool { return m.Remote == "" }
 
-// Author is the identity written on mirror commits.
-type Author struct {
+// MirrorAuthor is the identity written on mirror commits. Its JSON key is
+// "author" for compatibility with existing configs.
+type MirrorAuthor struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
 }
 
 // Config is the on-disk configuration.
 type Config struct {
-	Version            int      `json:"version"`
-	Emails             []string `json:"emails"`
-	Repos              []string `json:"repos"`
-	Scan               []string `json:"scan,omitempty"` // folders searched for repos on every plan and sync
-	IncludeGitHubRepos bool     `json:"include_github_repos"`
-	Mirror             Mirror   `json:"mirror"`
-	Author             Author   `json:"author"`
-	TimePolicy         string   `json:"time_policy"`
-	Identity           string   `json:"identity"`
-	NoticeAccepted     bool     `json:"notice_accepted"`
+	Version            int            `json:"version"`
+	Emails             []string       `json:"emails"`
+	Repos              []string       `json:"repos"`          // source repos
+	ScanFolders        []string       `json:"scan,omitempty"` // folders searched for repos on every plan and sync
+	IncludeGitHubRepos bool           `json:"include_github_repos"`
+	Mirror             MirrorSettings `json:"mirror"`
+	MirrorAuthor       MirrorAuthor   `json:"author"`
+	TimePolicy         string         `json:"time_policy"`
+	Identity           string         `json:"identity"`
+	NoticeAccepted     bool           `json:"notice_accepted"`
 }
 
 // ErrNoConfig is wrapped by Load when the config file does not exist.
@@ -81,7 +82,7 @@ func Default() (*Config, error) {
 	}
 	return &Config{
 		Version:    1,
-		Mirror:     Mirror{Path: filepath.Join(d, "mirror.git"), Branch: "main", Visibility: "private"},
+		Mirror:     MirrorSettings{Path: filepath.Join(d, "mirror.git"), Branch: "main", Visibility: "private"},
 		TimePolicy: ident.PolicyExact,
 		Identity:   ident.ModeAuthorDate,
 	}, nil
@@ -133,10 +134,10 @@ func (c *Config) Validate() error {
 	switch {
 	case len(c.Emails) == 0:
 		return errors.New("config: emails is empty")
-	case c.Author.Email == "":
+	case c.MirrorAuthor.Email == "":
 		return errors.New("config: author.email is empty")
-	case !bareEmail(c.Author.Email):
-		return fmt.Errorf("config: author.email %q: want a bare address like you@example.com", c.Author.Email)
+	case !bareEmail(c.MirrorAuthor.Email):
+		return fmt.Errorf("config: author.email %q: want a bare address like you@example.com", c.MirrorAuthor.Email)
 	case c.Mirror.Path == "" || c.Mirror.Branch == "":
 		return errors.New("config: mirror.path and mirror.branch are required")
 	case c.Mirror.Repo != "" && !githubRepo(c.Mirror.Repo):

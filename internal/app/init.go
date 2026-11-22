@@ -174,7 +174,7 @@ func askRepos(p *prompter, cfg *config.Config, paths, scan []string) (found []st
 		return nil, errAborted
 	}
 	cfg.Repos = append(cfg.Repos, added...)
-	cfg.Scan = append(cfg.Scan, dirs...)
+	cfg.ScanFolders = append(cfg.ScanFolders, dirs...)
 	return found, nil
 }
 
@@ -196,9 +196,9 @@ func pickRepos(out io.Writer, cfg *config.Config, paths []string, found []source
 			repos = append(repos, r)
 		}
 	}
-	ins := inspectAll(cfg, repos, time.Time{})
+	ins := inspectAll(cfg, repos, time.Time{}, false)
 	for i, r := range repos {
-		named := r.scan == ""
+		named := r.scanFolder == ""
 		switch {
 		case have[r.path]:
 			fmt.Fprintf(out, "  have  %s (already in config)\n", r.path)
@@ -289,19 +289,19 @@ func (d *draft) decideSecret(out io.Writer, phrase string, force bool) error {
 // GitHub; a repo that does not exist yet is left for apply to create.
 func (d *draft) askMirror(p *prompter, gh ghx.GitHub, o InitOptions) error {
 	cfg := d.cfg
-	cfg.Author = config.Author{Name: o.AuthorName, Email: o.AuthorEmail}
+	cfg.MirrorAuthor = config.MirrorAuthor{Name: o.AuthorName, Email: o.AuthorEmail}
 	user, ghErr := gh.Account()
 	haveGH := ghErr == nil
-	if cfg.Author.Email == "" {
+	if cfg.MirrorAuthor.Email == "" {
 		if !haveGH {
 			return errors.New("gh is not logged in: run gh auth login, or pass --author-email")
 		}
-		cfg.Author.Email = user.NoreplyEmail
+		cfg.MirrorAuthor.Email = user.NoreplyEmail
 	}
-	if cfg.Author.Name == "" {
-		cfg.Author.Name = user.Login
-		if cfg.Author.Name == "" {
-			cfg.Author.Name = "greenbridge"
+	if cfg.MirrorAuthor.Name == "" {
+		cfg.MirrorAuthor.Name = user.Login
+		if cfg.MirrorAuthor.Name == "" {
+			cfg.MirrorAuthor.Name = "greenbridge"
 		}
 	}
 	if o.Public {
@@ -355,7 +355,7 @@ func (d *draft) apply(gh ghx.GitHub, out io.Writer) error {
 	if err := config.AddSeen(d.seen); err != nil {
 		return err
 	}
-	return MirrorOf(d.cfg).Ensure()
+	return MirrorClone(d.cfg).Ensure()
 }
 
 func (d *draft) saveSecret(out io.Writer) error {

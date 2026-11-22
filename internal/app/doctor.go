@@ -122,6 +122,30 @@ const emailWindow = "the last year"
 
 func emailSince() time.Time { return time.Now().AddDate(-1, 0, 0) }
 
+// gatherRepos inspects cfg's source repos the way plan does: one git log
+// each, in parallel.
+func gatherRepos(cfg *config.Config) []repoFacts {
+	rfs := make([]repoFacts, len(cfg.Repos))
+	var present []sourceRepo
+	var at []int
+	for i, repo := range cfg.Repos {
+		rfs[i].path = repo
+		if _, err := os.Stat(repo); err != nil {
+			rfs[i].missing = true
+			continue
+		}
+		present, at = append(present, sourceRepo{path: repo}), append(at, i)
+	}
+	for j, in := range inspectAll(cfg, present, emailSince(), false) {
+		rf := &rfs[at[j]]
+		rf.notGit, rf.hasGitHub, rf.authors = in.unreadable, in.gitHub, in.authors
+		if !in.unreadable && !in.hosted {
+			rf.userName, _ = gitx.Git(rf.path, "config", "user.name")
+		}
+	}
+	return rfs
+}
+
 func gather(gh ghx.GitHub) *facts {
 	f := &facts{}
 	f.git, f.gitErr = gitx.Git("", "--version")
@@ -133,35 +157,9 @@ func gather(gh ghx.GitHub) *facts {
 		f.account, f.accountErr = gh.Account()
 		return f
 	}
-	// Remotes are listed in the background while the local checks run.
-	ctx, cancel := context.WithTimeout(context.Background(), remoteTimeout)
-	remotes := make([][]source.Remote, len(f.cfg.Repos))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, remoteWorkers)
-	defer func() {
-		wg.Wait()
-		cancel()
-		for i := range f.repos {
-			f.repos[i].remotes = remotes[i]
-		}
-	}()
-	for i, repo := range f.cfg.Repos {
-		rf := repoFacts{path: repo}
-		if _, err := os.Stat(repo); err != nil {
-			rf.missing = true
-		} else if hasGitHub, err := source.HasGitHubRemote(repo); err != nil {
-			rf.notGit = true
-		} else {
-			rf.hasGitHub = hasGitHub
-			if !hasGitHub || f.cfg.IncludeGitHubRepos {
-				wg.Go(func() { remotes[i] = listRemotes(ctx, repo, sem) })
-				rf.authors, _ = source.Authors(repo, emailSince())
-				rf.userName, _ = gitx.Git(repo, "config", "user.name")
-			}
-		}
-		f.repos = append(f.repos, rf)
-	}
-	for _, dir := range f.cfg.Scan {
+	f.repos = gatherRepos(f.cfg)
+	defer gatherRemotes(f)()
+	for _, dir := range f.cfg.ScanFolders {
 		sf := scanFacts{path: dir}
 		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 			sf.missing = true
@@ -174,13 +172,33 @@ func gather(gh ghx.GitHub) *facts {
 	if f.accountErr != nil {
 		return f
 	}
-	if !strings.EqualFold(f.cfg.Author.Email, f.account.NoreplyEmail) {
+	if !strings.EqualFold(f.cfg.MirrorAuthor.Email, f.account.NoreplyEmail) {
 		f.emails, f.emailsErr = gh.Emails()
 	}
 	if f.cfg.Mirror.Repo != "" {
 		f.mirror, f.mirrorErr = gh.Repo(f.cfg.Mirror.Repo)
 	}
 	return f
+}
+
+// gatherRemotes compares the tracked remotes of every source repo sync reads
+// with the repo, in the background, and returns the wait for them. Doctor
+// asks GitHub meanwhile.
+func gatherRemotes(f *facts) (wait func()) {
+	ctx, cancel := context.WithTimeout(context.Background(), remoteTimeout)
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, remoteWorkers)
+	for i := range f.repos {
+		r := &f.repos[i]
+		if r.missing || r.notGit || (r.hasGitHub && !f.cfg.IncludeGitHubRepos) {
+			continue
+		}
+		wg.Go(func() { r.remotes = listRemotes(ctx, r.path, sem) })
+	}
+	return func() {
+		wg.Wait()
+		cancel()
+	}
 }
 
 // listRemotes compares repo's tracked remotes with the repo once a slot in
@@ -200,6 +218,7 @@ func diagnose(gh ghx.GitHub) []result {
 	rs = append(rs, checkRepos(f)...)
 	rs = append(rs, checkEmails(f)...)
 	rs = append(rs, checkRemotes(f)...)
+	rs = append(rs, checkHook(gatherHooks(f.cfg))...)
 	return append(rs,
 		checkGH(f),
 		checkAuthorEmail(f),
@@ -409,7 +428,7 @@ func checkAuthorEmail(f *facts) result {
 	case f.accountErr != nil:
 		return skipped(check, "gh")
 	}
-	email, u := f.cfg.Author.Email, f.account
+	email, u := f.cfg.MirrorAuthor.Email, f.account
 	if strings.EqualFold(email, u.NoreplyEmail) {
 		return ok(check, "author email is this account's noreply address")
 	}

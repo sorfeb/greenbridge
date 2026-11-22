@@ -39,7 +39,7 @@ func TestSyncEndToEnd(t *testing.T) {
 	}
 	for _, l := range lines {
 		f := strings.Split(l, "|")
-		if !strings.HasPrefix(f[0], "gb/1 ") || f[1] != cfg.Author.Email || f[2] != f[3] {
+		if !strings.HasPrefix(f[0], "gb/1 ") || f[1] != cfg.MirrorAuthor.Email || f[2] != f[3] {
 			t.Errorf("bad mirror commit %q", l)
 		}
 		if strings.Contains(l, gittest.Message) || strings.Contains(l, "work.com") {
@@ -101,7 +101,7 @@ func TestDateOnlyPolicy(t *testing.T) {
 		Emails: []string{"me@work.com"}, Repos: []string{src},
 		TimePolicy: ident.PolicyDateOnly, Identity: ident.ModeAuthorDate,
 	}
-	d, err := Collect(cfg, testSecret, time.Time{})
+	d, err := Collect(cfg, testSecret, PlanOptions{})
 	if err != nil || len(d.Entries) != 1 {
 		t.Fatalf("collect: %v %v", d, err)
 	}

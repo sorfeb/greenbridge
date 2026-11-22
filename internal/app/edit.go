@@ -28,7 +28,7 @@ func Add(kind string, values []string, out io.Writer) error {
 		change = func(c *config.Config) (bool, error) { return addRepos(out, c, values) }
 	case "scan":
 		change = func(c *config.Config) (changed bool, err error) {
-			changed, found, err = addScan(out, c, values)
+			changed, found, err = addScanFolders(out, c, values)
 			return changed, err
 		}
 	default:
@@ -55,7 +55,7 @@ func Remove(kind string, values []string, out io.Writer) error {
 	case "repo":
 		change = func(c *config.Config) (bool, error) { return removeRepos(out, c, values) }
 	case "scan":
-		change = func(c *config.Config) (bool, error) { return removeScan(out, c, values) }
+		change = func(c *config.Config) (bool, error) { return removeScanFolders(out, c, values) }
 	default:
 		return fmt.Errorf("gbridge remove %q: want email, repo, or scan", kind)
 	}
@@ -128,15 +128,15 @@ func addRepos(out io.Writer, cfg *config.Config, paths []string) (bool, error) {
 	return len(added) > 0, nil
 }
 
-// addScan keeps each folder in cfg.Scan, shows which repos in it count now,
+// addScanFolders keeps each folder in cfg.ScanFolders, shows which repos in it count now,
 // and returns those. A folder must hold a git repo, which catches a mistyped
 // path.
-func addScan(out io.Writer, cfg *config.Config, dirs []string) (changed bool, found []string, err error) {
+func addScanFolders(out io.Writer, cfg *config.Config, dirs []string) (changed bool, found []string, err error) {
 	var added []string
 	var repos []sourceRepo
 	for _, d := range dirs {
 		d = absPath(d)
-		if slices.Contains(cfg.Scan, d) || slices.Contains(added, d) {
+		if slices.Contains(cfg.ScanFolders, d) || slices.Contains(added, d) {
 			fmt.Fprintf(out, "  have  %s (already in config)\n", d)
 			continue
 		}
@@ -151,7 +151,7 @@ func addScan(out io.Writer, cfg *config.Config, dirs []string) (changed bool, fo
 	}
 	_, found, _ = pickRepos(out, cfg, nil, repos)
 	fmt.Fprintln(out, "Plan and sync search scan folders again every run, so later clones count too.")
-	cfg.Scan = append(cfg.Scan, added...)
+	cfg.ScanFolders = append(cfg.ScanFolders, added...)
 	return true, found, nil
 }
 
@@ -186,16 +186,16 @@ func removeRepos(out io.Writer, cfg *config.Config, paths []string) (bool, error
 	return true, nil
 }
 
-// removeScan matches each folder as given or made absolute, so a folder that
+// removeScanFolders matches each folder as given or made absolute, so a folder that
 // no longer exists can still be removed.
-func removeScan(out io.Writer, cfg *config.Config, dirs []string) (bool, error) {
+func removeScanFolders(out io.Writer, cfg *config.Config, dirs []string) (bool, error) {
 	for _, d := range dirs {
-		i := slices.IndexFunc(cfg.Scan, func(s string) bool { return s == d || s == absPath(d) })
+		i := slices.IndexFunc(cfg.ScanFolders, func(s string) bool { return s == d || s == absPath(d) })
 		if i < 0 {
 			return false, fmt.Errorf("%s is not a scan folder in config (gbridge config lists them)", d)
 		}
-		fmt.Fprintf(out, "  remove  %s\n", cfg.Scan[i])
-		cfg.Scan = slices.Delete(cfg.Scan, i, i+1)
+		fmt.Fprintf(out, "  remove  %s\n", cfg.ScanFolders[i])
+		cfg.ScanFolders = slices.Delete(cfg.ScanFolders, i, i+1)
 	}
 	fmt.Fprintln(out, "Commits already mirrored from repos in removed scan folders stay in the mirror.")
 	return true, nil
@@ -228,8 +228,8 @@ func writeConfig(w io.Writer, path string, cfg *config.Config) {
 	line("config", path)
 	list("emails", cfg.Emails, "none (gbridge add email <address>)")
 	list("repos", cfg.Repos, "none (gbridge add repo <path>)")
-	list("scan", cfg.Scan, "none (gbridge add scan <folder>)")
-	if len(cfg.Scan) > 0 {
+	list("scan", cfg.ScanFolders, "none (gbridge add scan <folder>)")
+	if len(cfg.ScanFolders) > 0 {
 		line("", "searched for repos with your commits on every plan and sync")
 	}
 	if cfg.IncludeGitHubRepos {
@@ -245,5 +245,5 @@ func writeConfig(w io.Writer, path string, cfg *config.Config) {
 	}
 	line("", "local clone "+cfg.Mirror.Path)
 	line("timestamps", cfg.TimePolicy)
-	line("author", cfg.Author.Name+" <"+cfg.Author.Email+">")
+	line("author", cfg.MirrorAuthor.Name+" <"+cfg.MirrorAuthor.Email+">")
 }

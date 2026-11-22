@@ -14,6 +14,7 @@ go tool -modfile tools.mod task --list  # everything else
 
 ## Conventions
 
+- Words for domain concepts come from `GLOSSARY.md`, in code, output, docs, and issues. A new concept gets its entry in the same PR.
 - `go.mod` lists only what gbridge ships with. Dev tools go in `tools.mod` via `go get -tool -modfile tools.mod`.
 - **Honestly green**: a red gate is fixed in the code, never by weakening the gate. A `//nolint` names the linter and says why.
 - Tests first. No tautological tests. Output that users see (banner, graph) is pinned by goldens.

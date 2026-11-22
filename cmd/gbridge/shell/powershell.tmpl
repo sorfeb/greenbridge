@@ -19,6 +19,12 @@ Register-ArgumentCompleter -Native -CommandName gbridge, gbridge.exe -ScriptBloc
         )
 {{- end}}{{end}}
     }
+    # Per command: the values its first argument takes.
+    $values = @{
+{{- range .Commands}}{{if .Words}}
+        '{{.Name}}' = '{{pq .Words}}'
+{{- end}}{{end}}
+    }
 
     # Words before the cursor, minus the one being completed.
     $words = @($commandAst.CommandElements |
@@ -35,9 +41,9 @@ Register-ArgumentCompleter -Native -CommandName gbridge, gbridge.exe -ScriptBloc
         }
         return
     }
-    if ($words[1] -eq 'completion') {
+    if ($values[$words[1]]) {
         if ($words.Count -eq 2) {
-            foreach ($s in '{{.Shells}}'.Split(' ')) { if ($s -like "$wordToComplete*") { & $result $s $s } }
+            foreach ($v in $values[$words[1]].Split(' ')) { if ($v -like "$wordToComplete*") { & $result $v $v } }
         }
         return
     }

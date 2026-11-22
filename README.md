@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-<p align="center">Mirror commits GitHub can't see onto your GitHub contribution graph, without copying any code.</p>
+<p align="center"><b>Show GitLab, Bitbucket, Gitea, Forgejo, and self-hosted git commits on your GitHub contribution graph.</b><br>Private work commits become green squares. No code leaves your machine.</p>
 
 <p align="center">
   <a href="https://github.com/sorfeb/greenbridge/actions/workflows/ci.yml"><img src="https://github.com/sorfeb/greenbridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -15,7 +15,13 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/sorfeb/greenbridge" alt="MIT license"></a>
 </p>
 
-Work on an employer GitLab, Bitbucket, a self-hosted Gitea or Forgejo, or an on-prem server never reaches your GitHub contribution graph. `gbridge` reads commit metadata from your local clones and writes one empty, backdated commit per real commit to a private mirror repo you own. GitHub then counts those commits like any other, and the green squares appear.
+GitHub counts only commits it can see. Work on an employer GitLab, Bitbucket, a self-hosted Gitea or Forgejo, or an on-prem server leaves your GitHub profile empty. `gbridge` reads commit metadata from your local clones and writes one empty, backdated commit per commit you authored to a private mirror repo you own. GitHub counts those like any other, and the green squares appear.
+
+```sh
+go install github.com/sorfeb/greenbridge/cmd/gbridge@latest   # or download a release; see Install
+gbridge init --email you@work.com --scan ~/work               # private mirror repo; ~/work is searched again on every run
+gbridge plan                                                  # preview, writes nothing; then gbridge sync
+```
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/forge-gitlab-dark.svg"><img src=".github/assets/forge-gitlab-light.svg" alt="GitLab" title="GitLab" width="48"></picture>
@@ -29,21 +35,12 @@ Work on an employer GitLab, Bitbucket, a self-hosted Gitea or Forgejo, or an on-
 
 <p align="center">Works with GitLab, Bitbucket, Gitea, Forgejo, Codeberg, and any server you can <code>git clone</code> from.</p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-bridge-dark.gif">
-  <img src=".github/assets/how-bridge-light.gif" alt="Commit squares cross a suspension bridge from a private forge to a GitHub contribution graph" width="640">
-</picture>
-
-```sh
-go install github.com/sorfeb/greenbridge/cmd/gbridge@latest   # or download a release; see Install
-gbridge init --email you@work.com --scan ~/work               # creates a private mirror repo
-gbridge plan                                                  # preview, writes nothing; then gbridge sync
-```
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/proof-dark.svg">
-  <img src=".github/assets/proof-light.svg" alt="A contribution graph before and after gbridge sync: sparse personal activity, then a busy weekday pattern with a two-week holiday left empty. Sample data." width="640">
-</picture>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/proof-dark.svg">
+    <img src=".github/assets/proof-light.svg" alt="A contribution graph before and after gbridge sync: sparse personal activity, then a busy weekday pattern with a two-week holiday left empty. Sample data." width="640">
+  </picture>
+</p>
 
 ### Real account, real numbers
 
@@ -61,12 +58,13 @@ Every added square is a commit the maintainer wrote, on the day they wrote it.
 ## Table of contents
 
 - [Security](#security)
-- [Background](#background)
+- [Why GitHub hides your private work commits](#why-github-hides-your-private-work-commits)
 - [Do you need this?](#do-you-need-this)
 - [Install](#install)
 - [Usage](#usage)
 - [What counts](#what-counts)
 - [Keeping the graph current](#keeping-the-graph-current)
+- [Work on a remote dev box](#work-on-a-remote-dev-box)
 - [Alternatives](#alternatives)
 - [Limitations](#limitations)
 - [FAQ](#faq)
@@ -84,7 +82,7 @@ Code, diffs, file names, commit messages, repo and branch names, commit hashes, 
 
 The secret lives in your config directory. Back up the phrase from `gbridge secret`: losing it means the next sync can't recognise what is already mirrored, and double counts.
 
-## Background
+## Why GitHub hides your private work commits
 
 GitHub counts a commit when it is on the default branch of a non-fork repo and its author email belongs to your account ([reference](https://docs.github.com/en/account-and-profile/reference/profile-contributions-reference)). Commits are placed on the day of their author date, in the commit's own time zone. An empty commit counts the same as any other.
 
@@ -114,7 +112,7 @@ go install github.com/sorfeb/greenbridge/cmd/gbridge@latest    # Go 1.27+
 
 Or download the archive for your platform from [Releases](https://github.com/sorfeb/greenbridge/releases) and put `gbridge` on your `PATH`.
 
-While this repo is private, set `GOPRIVATE=github.com/sorfeb/*` first, or run `go install ./cmd/gbridge` from a clone.
+mise and the release archives need the first tagged release, v0.1.0. Until it ships, use `go install`.
 
 The command is `gbridge`, not `gb`: oh-my-zsh and prezto alias `gb` to `git branch`.
 
@@ -126,6 +124,15 @@ Each release ships `checksums.txt`, an SBOM per archive, and a GitHub build prov
 gh attestation verify gbridge_<version>_linux_amd64.tar.gz --repo sorfeb/greenbridge
 ```
 
+### First run on macOS and Windows
+
+Release binaries aren't signed or notarized yet, so your OS warns once. Verify the download first (above), then:
+
+- **macOS** says `gbridge` is damaged or can't be opened. Remove the quarantine flag in the folder that holds it: `xattr -d com.apple.quarantine gbridge`. Or open **System Settings > Privacy & Security** and choose **Open Anyway**.
+- **Windows** SmartScreen shows "Windows protected your PC". Choose **More info**, then **Run anyway**.
+
+`go install` and `mise` builds don't show these prompts.
+
 ## Usage
 
 ```sh
@@ -135,15 +142,20 @@ gbridge sync                                      # mirror and push; rerun any t
 gbridge doctor                                    # explain missing squares
 ```
 
+`--scan` names a folder `gbridge` searches for repos on every `plan` and `sync`, so a repo you clone later counts without another setup step. Repeat `--scan` for several folders, or use `--repo <path>` for one repo.
+
 ### CLI
 
 | Command | Does | Useful flags |
 |---|---|---|
-| `gbridge init` | Sets up emails, source repos, the secret, and the mirror repo | `--email`, `--repo`, `--scan` (repeatable), `--mirror`, `--public`, `--local-only`, `--secret` |
+| `gbridge init` | Sets up emails, source repos, scan folders, the secret, and the mirror repo | `--email`, `--repo`, `--scan` (repeatable), `--mirror`, `--public`, `--local-only`, `--secret` |
+| `gbridge add` | Adds an `email`, `repo`, or `scan` folder to the config | `gbridge add scan ~/work` |
+| `gbridge remove` | Removes an `email`, `repo`, or `scan` folder from the config | `gbridge remove scan ~/work` |
+| `gbridge config` | Prints the current setup, never the secret | |
 | `gbridge plan` | Previews counts per year and a terminal graph | `--since YYYY-MM-DD`, `--offline` |
 | `gbridge sync` | Adds missing commits to the mirror and pushes | `--since`, `--dry-run`, `--no-push` |
 | `gbridge backfill` | Alias for `sync`, for recovering past work | `--since` |
-| `gbridge doctor` | Checks every condition GitHub needs to show a square | |
+| `gbridge doctor` | Checks every condition GitHub needs to show a square, and finds commits under emails missing from config | |
 | `gbridge secret` | Prints the recovery phrase for a second machine | |
 | `gbridge completion` | Prints a tab-completion script | `bash`, `zsh`, `fish`, `powershell` |
 
@@ -152,6 +164,25 @@ gbridge doctor                                    # explain missing squares
 - **Several machines** can sync into one mirror. Run `gbridge secret` on the first, then `gbridge init --secret <phrase>` on the second. A different secret produces different IDs and double counts.
 - **Private mirror:** turn on **Include private contributions on my profile** at <https://github.com/settings/profile>. `gbridge doctor` reports this setting as unverified, since no GitHub API exposes it.
 - `GBRIDGE_HOME` overrides the config directory.
+
+### Change emails, repos, and scan folders
+
+You don't need `gbridge init --force`, which asks everything again. `add` and `remove` change only the config file. The secret and the mirror stay as they are, so mirror IDs don't change.
+
+```sh
+gbridge add scan ~/work                 # search this folder on every plan and sync
+gbridge add email old@laptop.example    # another work email
+gbridge add repo ~/code/api             # one repo, kept even before it has matching commits
+gbridge remove scan ~/work
+gbridge remove repo ~/code/api          # works after the clone is deleted
+gbridge config                          # print the current setup
+```
+
+- **Scan folders are remembered.** Every `plan` and `sync` searches them again. A repo with your commits and no github.com remote that appears later is mirrored. `plan` and the first `sync` that picks it up print `new   <path> (from scan folder <folder>)`, so it doesn't go unnoticed.
+- **A bad value changes nothing.** A non-email, a path that isn't a git repo, or an unknown entry on `remove` aborts before anything is written.
+- **Removing is forward-only.** Commits already in the mirror stay there; see [Limitations](#limitations).
+
+`gbridge doctor` also lists commits from the last year under your author name and an email that isn't in config, and suggests `gbridge add email <address>`. It never suggests an email that other authors use too: in a shared repo that is usually a coworker's address, and adding it would mirror their work as yours.
 
 ### Tab completion
 
@@ -173,6 +204,7 @@ Release archives also include the four scripts under `completions/`.
 - Its author email is one you gave `gbridge init`.
 - It is reachable from any local branch, remote-tracking branch, or tag in a source clone.
 - Its repo has no github.com remote, since GitHub already counts those. Override at init with `--include-github`.
+- Its repo is one you named (`--repo`, `gbridge add repo`) or one found in a scan folder that holds commits by your emails.
 
 Duplicates collapse: a rebased, cherry-picked, or amended commit keeps its author email and date, so it maps to the same ID and counts once. Tested against all three in [issue #25](https://github.com/sorfeb/greenbridge/issues/25#issuecomment-6415125896). Two different commits by one email in the same second also collapse to one ID.
 
@@ -190,6 +222,15 @@ Duplicates collapse: a rebased, cherry-picked, or amended commit keeps its autho
 There is no automatic trigger yet. Run `gbridge sync` after you push.
 
 A local sync costs about 0.5 s. Network round trips to GitHub (check the mirror, fetch, push) add 3-6 s. The planned pre-push hook will only queue a request and start a detached `gbridge sync`, so it adds milliseconds to your push and never blocks or fails it.
+
+## Work on a remote dev box
+
+Your commits are made on a shared remote machine and pushed to GitLab, the upstream. Keep the upstream as the only source and mirror from your own laptop:
+
+1. On the box, `git push` to the upstream before you stop work. Unpushed commits exist only on the box, so `gbridge` can't see them.
+2. On the laptop, keep a clone of each repo. Run `git fetch --all` in each, then `gbridge sync`.
+
+Don't install `gbridge` on the box, and don't put a GitHub token there. The mirror is yours, so its credentials stay on your own machine, and nothing on the shared box needs to reach github.com.
 
 ## Alternatives
 
@@ -219,13 +260,17 @@ Other tools solve the same problem. Pick by where your code lives and what you a
 
 Run `gbridge init --email you@work.com --scan ~/work`, then `gbridge plan` and `gbridge sync`. `gbridge` reads your local GitLab clones and writes one empty, backdated commit per commit you authored to a private mirror repo on your account. Turn on private contributions in your profile settings so the squares show. See [Install](#install) and [Usage](#usage).
 
+### How do I show self-hosted git contributions on my GitHub graph?
+
+Same commands. `gbridge` reads local clones, so a Gitea, Forgejo, or bare-git server works as long as you can `git clone` from it. Scan the folder that holds your clones and `gbridge` finds the repos with your commits.
+
 ### How do I show private work commits on my GitHub contribution graph?
 
 If the work is on github.com, you don't need `gbridge`: turn on **Include private contributions on my profile**. If it is on another host, mirror it with `gbridge`, then turn on the same setting. `gbridge doctor` reports that setting as unverified, since no GitHub API exposes it.
 
 ### Can I show Bitbucket, Gitea, or Forgejo commits on GitHub?
 
-Yes. `gbridge` reads local git clones, so the host doesn't matter.
+Yes. `gbridge` reads local git clones, so the host doesn't matter. Bitbucket Cloud, Bitbucket Server, Gitea, Forgejo, and Codeberg all work the same way.
 
 ### Why aren't my commits showing as green squares?
 
@@ -237,13 +282,21 @@ Run `gbridge doctor`. GitHub counts a commit only when all of these hold:
 
 The graph can take up to 24 hours to update after a push.
 
+### Why is my GitHub contribution graph empty when I work on GitLab?
+
+GitHub counts commits in repos it hosts. GitLab commits never reach it. Mirror them with `gbridge`; see [Do you need this?](#do-you-need-this) first.
+
+### `gbridge doctor` says an email is missing from config. What now?
+
+Doctor found commits from the last year under your author name and an email that isn't in config. Run the `gbridge add email <address>` it prints, then `gbridge plan`. If doctor says an address is left out because it also has commits under other author names, don't add it: other people use it.
+
 ### Does it copy my code or commit messages?
 
 No. Per commit, only a timestamp and an opaque 12-character ID leave your machine. See [Security](#security).
 
 ### Is mirroring work commits allowed by GitHub?
 
-`gbridge` mirrors commits you wrote, one to one, at the time you wrote them. It never fills gaps or pads streaks, which is what GitHub's [acceptable use policy](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github) targets. Check your employment contract first; see [Background](#background).
+`gbridge` mirrors commits you wrote, one to one, at the time you wrote them. It never fills gaps or pads streaks, which is what GitHub's [acceptable use policy](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github) targets. Check your employment contract first; see [Why GitHub hides your private work commits](#why-github-hides-your-private-work-commits).
 
 ### What happens when I rebase, cherry-pick, or squash?
 
@@ -261,3 +314,10 @@ go tool -modfile tools.mod task fix     # auto-fix lint and formatting
 ## License
 
 [MIT](LICENSE)
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-bridge-dark.gif">
+    <img src=".github/assets/how-bridge-light.gif" alt="Commit squares cross a suspension bridge from a private forge to a GitHub contribution graph" width="400">
+  </picture>
+</p>

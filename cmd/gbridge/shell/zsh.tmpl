@@ -17,10 +17,11 @@ _gbridge() {
   shift words
   (( CURRENT-- ))
   case $cmd in
-    completion)
-      _arguments '1:shell:({{.Shells}})'
+{{- range .Commands}}{{if .Words}}
+    {{.Name}})
+      _arguments '1:{{.Name}} argument:({{.Words}})'
       ;;
-{{- range .Commands}}{{if .Flags}}
+{{- else if .Flags}}
     {{.Name}})
       _arguments
 {{- range .Flags}} \
