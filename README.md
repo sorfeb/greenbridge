@@ -148,6 +148,21 @@ gbridge hook status     # source repos covered, last background sync
 
 Every `git push` from a source repo starts a background sync. The push hook never fails or slows the push, and no repo's tracked files change. Output goes to `sync.log` in the greenbridge home. Leave one repo out with `git config hook.gbridge.enabled false` in it. On Git before 2.54, `gbridge hook install --per-repo` writes a pre-push hook into each source repo's `.git/hooks`.
 
+**lefthook on Git before 2.54:** `lefthook install` replaces the per-repo push hook. Add gbridge to your own `lefthook-local.yml` instead, next to the repo's `lefthook.yml`, and keep it out of the repo:
+
+```yaml
+pre-push:
+  jobs:
+    - name: gbridge
+      run: gbridge hook pre-push </dev/null >/dev/null 2>&1 || true
+```
+
+```sh
+echo lefthook-local.yml >> .git/info/exclude
+```
+
+`gbridge hook status` still lists these repos as uncovered. husky and pre-commit configs are committed and shared with your team, so gbridge has no recipe for them: use Git 2.54+ and the global push hook.
+
 ### Work on a remote dev box
 
 <img src=".github/assets/remote-relay-dark.svg" alt="Remote dev box with no GitHub token pushes to upstream GitLab; your laptop fetches and runs gbridge sync to the GitHub mirror" width="640">
