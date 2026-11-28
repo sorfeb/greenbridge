@@ -1,0 +1,56 @@
+name: install-smoke
+# Installs the published Homebrew cask on a clean Mac and runs it. Release binaries are
+# unsigned (issue #28); the cask's post-install hook strips the quarantine attribute so
+# Gatekeeper doesn't block them. This proves that hook still works.
+on:
+  # A release pushed with GITHUB_TOKEN triggers no `release` event, but workflow_run fires.
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  pull_request:
+    paths: [.github/workflows/install-smoke.yml]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Expected version without the v (empty: whatever the tap has)"
+        required: false
+
+permissions: {}
+
+jobs:
+  cask:
+    # workflow_run also fires for pull request snapshot builds; only a tag push publishes.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
+    runs-on: macos-latest
+    steps:
+      - name: Install from the tap
+        run: brew install --cask sorfeb/tap/gbridge
+      - name: Quarantine stripped
+        run: |
+          set -eu
+          bin="$(readlink -f "$(command -v gbridge)")"
+          echo "binary: $bin"
+          if xattr -p com.apple.quarantine "$bin" 2>/dev/null; then
+            echo "::error::$bin still carries com.apple.quarantine; Gatekeeper blocks it"
+            exit 1
+          fi
+          # The check above passes trivially if brew never quarantined the download.
+          dl="$(brew --cache --cask sorfeb/tap/gbridge)"
+          if ! xattr -p com.apple.quarantine "$dl" >/dev/null 2>&1; then
+            echo "::warning::brew did not quarantine $dl, so this run does not prove the hook works"
+          fi
+      - name: Runs and reports the expected version
+        env:
+          # A tag push sets head_branch to the tag name.
+          WANT: ${{ inputs.version || github.event.workflow_run.head_branch }}
+        run: |
+          set -eu
+          got="$(gbridge version)"
+          echo "$got"
+          want="${WANT#v}"
+          if [ -n "$want" ] && [ "$got" != "gbridge $want" ]; then
+            echo "::error::want gbridge $want, got $got (tap not updated yet?)"
+            exit 1
+          fi
