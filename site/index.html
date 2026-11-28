@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>greenbridge: your off-GitHub commits on your GitHub contribution graph</title>
+<meta name="description" content="Your work happens on GitLab, Bitbucket, Gitea, Forgejo, or a self-hosted server. gbridge puts it on your GitHub contribution graph. Only timestamps and opaque IDs leave your machine.">
+<link rel="canonical" href="https://gbridge.s11o.online/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="greenbridge: your work, on your graph">
+<meta property="og:description" content="Mirror commits from any git host onto your GitHub contribution graph. No code leaves your machine.">
+<meta property="og:image" content="https://gbridge.s11o.online/assets/social-preview.png">
+<meta property="og:url" content="https://gbridge.s11o.online/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"greenbridge","alternateName":"gbridge","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, macOS, Linux","license":"https://opensource.org/licenses/MIT","codeRepository":"https://github.com/sorfeb/greenbridge","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+</script>
+<style>
+  :root{--bg:#ffffff;--card:#f6f8fa;--line:#d0d7de;--f:#1f2328;--m:#59636e;--acc:#1a7f37;--accbg:#dafbe1;
+    --g0:#ebedf0;--g1:#9be9a8;--g2:#40c463;--g3:#30a14e;--g4:#216e39;--code:#0d1117;--codef:#e6edf3}
+  .dark{--bg:#0d1117;--card:#161b22;--line:#30363d;--f:#f0f6fc;--m:#9198a1;--acc:#3fb950;--accbg:#0e4429;
+    --g0:#161b22;--g1:#0e4429;--g2:#006d32;--g3:#26a641;--g4:#39d353;--code:#010409;--codef:#e6edf3}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--f);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif}
+  .mono,code,pre,h1,h2,.brand{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+  a{color:var(--acc)}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+  img{max-width:100%;height:auto;display:block}
+
+  nav{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;gap:20px;height:56px}
+  .brand{font-weight:700;text-decoration:none;color:var(--f);display:flex;align-items:center;gap:8px}
+  .brand i{display:grid;grid-template-columns:repeat(3,6px);gap:2px}
+  .brand i b{width:6px;height:6px;border-radius:1.5px;background:var(--g2)}
+  .brand i b:nth-child(2n){background:var(--g4)}.brand i b:nth-child(3n){background:var(--g1)}
+  nav .links{margin-left:auto;display:flex;gap:18px;align-items:center;font-size:14px}
+  nav .links a{color:var(--m);text-decoration:none}nav .links a:hover{color:var(--f)}
+  .btn{display:inline-flex;align-items:center;gap:8px;font:600 14px/1 inherit;padding:10px 16px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--f);text-decoration:none;cursor:pointer}
+  .btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+  .dark .btn.primary{color:#0d1117}
+  #theme{padding:6px 10px}
+
+  header.hero{padding:56px 0 24px;text-align:center}
+  .hero picture img{margin:0 auto;width:min(720px,100%)}
+  h1{font-size:clamp(28px,4.4vw,46px);line-height:1.15;letter-spacing:-.02em;margin:28px auto 14px;max-width:22ch}
+  h1 em{font-style:normal;color:var(--acc)}
+  .sub{color:var(--m);font-size:clamp(16px,2vw,19px);max-width:60ch;margin:0 auto 26px}
+  .ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+  section{padding:64px 0;border-top:1px solid var(--line)}
+  h2{font-size:clamp(22px,3vw,30px);letter-spacing:-.01em;margin:0 0 8px}
+  .lead{color:var(--m);margin:0 0 28px;max-width:62ch}
+  .center{text-align:center}.center .lead{margin-left:auto;margin-right:auto}
+
+  .forges{display:flex;flex-wrap:wrap;justify-content:center;gap:18px;margin:6px 0 0}
+  .forges figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--m);width:84px}
+  .forges img{width:48px;height:48px}
+
+  .install{max-width:760px;margin:0 auto}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:-1px}
+  .tabs button{font:600 13px/1 inherit;padding:10px 14px;border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;background:none;color:var(--m);cursor:pointer}
+  .tabs button[aria-selected=true]{background:var(--code);color:var(--codef);border-color:var(--line)}
+  .term{position:relative;background:var(--code);color:var(--codef);border:1px solid var(--line);border-radius:0 8px 8px 8px;padding:18px 20px;overflow-x:auto}
+  .term pre{margin:0;font-size:14px;line-height:1.7}
+  .term .c{color:#8b949e}.term .p{color:#3fb950;user-select:none}
+  .copy{position:absolute;top:10px;right:10px;font:12px/1 inherit;padding:6px 10px;border-radius:6px;border:1px solid #30363d;background:#161b22;color:#e6edf3;cursor:pointer}
+  .note{color:var(--m);font-size:14px;margin:12px 0 0}
+
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:32px}
+  .step{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
+  .step .n{font:700 12px/1 ui-monospace,monospace;color:var(--acc);background:var(--accbg);padding:4px 8px;border-radius:99px;display:inline-block;margin-bottom:10px}
+  .step h3{margin:0 0 6px;font-size:16px}.step p{margin:0;color:var(--m);font-size:15px}
+  .step code{font-size:13px;color:var(--f)}
+  .art{margin:0 auto;width:min(760px,100%)}
+  .frame{background:#0d1117;border-radius:12px;padding:12px;border:1px solid var(--line)}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:28px 0 36px}
+  .stat{border:1px solid var(--line);border-radius:10px;padding:18px}
+  .stat .k{font-size:13px;color:var(--m)}
+  .stat .v{font:700 32px/1.1 ui-monospace,monospace;margin:6px 0 4px;letter-spacing:-.02em}
+  .stat .d{font-size:13px;color:var(--m)}.stat .d b{color:var(--f)}
+  .src{font-size:13px;color:var(--m)}
+  details.tbl{margin-top:10px;font-size:14px}
+  table{border-collapse:collapse;width:100%;margin-top:10px;font-size:14px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}th{color:var(--m);font-weight:600}
+
+  .split{display:grid;grid-template-columns:1.1fr 1fr;gap:36px;align-items:center}
+  @media (max-width:820px){.split{grid-template-columns:1fr}}
+  .fields{list-style:none;padding:0;margin:0 0 18px}
+  .fields li{border-left:3px solid var(--acc);padding:6px 0 6px 14px;margin-bottom:12px}
+  .fields b{display:block}.fields span{color:var(--m);font-size:15px}
+  .never{display:flex;flex-wrap:wrap;gap:8px}
+  .never span{font:13px/1 ui-monospace,monospace;padding:6px 10px;border-radius:99px;border:1px dashed var(--line);color:var(--m);text-decoration:line-through}
+
+  .need{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+  .need .step.yes{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+  .tag{font:600 12px/1 ui-monospace,monospace;display:inline-block;padding:4px 8px;border-radius:99px;margin-bottom:10px;border:1px solid var(--line);color:var(--m)}
+  .yes .tag{background:var(--accbg);color:var(--acc);border-color:transparent}
+
+  .faq{max-width:760px}
+  .faq details{border-bottom:1px solid var(--line);padding:14px 0}
+  .faq summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;gap:16px}
+  .faq summary::after{content:"+";color:var(--m);font-family:ui-monospace,monospace}
+  .faq details[open] summary::after{content:"\2212"}
+  .faq p{color:var(--m);margin:10px 0 0}
+
+  .cta-end{text-align:center}
+  .graph{display:grid;grid-template-columns:repeat(26,12px);grid-template-rows:repeat(7,12px);grid-auto-flow:column;gap:3px;justify-content:center;margin:0 auto 28px}
+  .graph b{border-radius:2px;background:var(--g0);outline:1px solid color-mix(in srgb,var(--f) 6%,transparent);outline-offset:-1px;transition:background .5s}
+  footer{border-top:1px solid var(--line);padding:28px 0 40px;color:var(--m);font-size:14px}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between}
+  footer a{color:var(--m)}
+  @media (max-width:640px){nav .links a.sec{display:none}.stats{grid-template-columns:1fr 1fr}.stat .v{font-size:26px}}
+  @media (prefers-reduced-motion:reduce){.graph b{transition:none}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <a class="brand" href="#top"><i aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></i>greenbridge</a>
+  <div class="links">
+    <a class="sec" href="#how">How it works</a>
+    <a class="sec" href="#privacy">Privacy</a>
+    <a class="sec" href="#install">Install</a>
+    <a href="https://github.com/sorfeb/greenbridge#readme">Docs</a>
+    <a href="https://github.com/sorfeb/greenbridge">GitHub</a>
+    <button class="btn" id="theme" aria-label="Toggle dark mode">◐</button>
+  </div>
+</div></nav>
+
+<header class="hero" id="top"><div class="wrap">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.svg" data-dark>
+    <img src="assets/hero-light.svg" data-light="assets/hero-light.svg" data-darksrc="assets/hero-dark.svg" alt="The Golden Gate Bridge drawn in contribution-graph squares">
+  </picture>
+  <h1>Your work happens off GitHub. <em>Your graph should show it.</em></h1>
+  <p class="sub">GitHub only counts commits it hosts. <code>gbridge</code> mirrors the commits you author anywhere else onto your contribution graph, 1:1, on their real dates. Only timestamps and opaque IDs leave your machine.</p>
+  <div class="ctas">
+    <a class="btn primary" href="#install">Install gbridge</a>
+    <a class="btn" href="https://github.com/sorfeb/greenbridge">★ Star on GitHub</a>
+  </div>
+</div></header>
+
+<section class="center" aria-label="Supported git hosts"><div class="wrap">
+  <p class="lead">Works with any server you can <code>git clone</code> from.</p>
+  <div class="forges">
+    <figure><img src="assets/forge-gitlab-light.svg" data-light="assets/forge-gitlab-light.svg" data-darksrc="assets/forge-gitlab-dark.svg" alt=""><figcaption>GitLab</figcaption></figure>
+    <figure><img src="assets/forge-bitbucket-light.svg" data-light="assets/forge-bitbucket-light.svg" data-darksrc="assets/forge-bitbucket-dark.svg" alt=""><figcaption>Bitbucket</figcaption></figure>
+    <figure><img src="assets/forge-gitea-light.svg" data-light="assets/forge-gitea-light.svg" data-darksrc="assets/forge-gitea-dark.svg" alt=""><figcaption>Gitea</figcaption></figure>
+    <figure><img src="assets/forge-forgejo-light.svg" data-light="assets/forge-forgejo-light.svg" data-darksrc="assets/forge-forgejo-dark.svg" alt=""><figcaption>Forgejo</figcaption></figure>
+    <figure><img src="assets/forge-codeberg-light.svg" data-light="assets/forge-codeberg-light.svg" data-darksrc="assets/forge-codeberg-dark.svg" alt=""><figcaption>Codeberg</figcaption></figure>
+    <figure><img src="assets/forge-git-light.svg" data-light="assets/forge-git-light.svg" data-darksrc="assets/forge-git-dark.svg" alt=""><figcaption>Any git server</figcaption></figure>
+    <figure><img src="assets/forge-self-hosted-light.svg" data-light="assets/forge-self-hosted-light.svg" data-darksrc="assets/forge-self-hosted-dark.svg" alt=""><figcaption>Self-hosted</figcaption></figure>
+  </div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <h2>How it works</h2>
+  <p class="lead">No API tokens for your work host. <code>gbridge</code> reads commit metadata from the clones you already have.</p>
+  <div class="steps">
+    <div class="step"><span class="n">1</span><h3>Read your clones</h3><p>Scans local repos for commits authored by your work emails, on every branch.</p></div>
+    <div class="step"><span class="n">2</span><h3>Strip everything</h3><p>Keeps the author date and an HMAC ID. Code, messages, file names, and emails stay local.</p></div>
+    <div class="step"><span class="n">3</span><h3>Mirror to GitHub</h3><p>Writes one empty, backdated commit per source commit to a private repo you own. Rerun any time: <code>sync</code> is idempotent.</p></div>
+  </div>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/how-bridge-dark.gif" data-dark>
+    <img class="art" src="assets/how-bridge-light.gif" data-light="assets/how-bridge-light.gif" data-darksrc="assets/how-bridge-dark.gif" alt="Commit squares cross a suspension bridge from a private forge to a GitHub contribution graph" loading="lazy">
+  </picture>
+</div></section>
+
+<section id="proof"><div class="wrap">
+  <h2>Real account, real numbers</h2>
+  <p class="lead">The maintainer's own graph, 12 months to 2026-11-02: 2,292 commits mirrored from non-GitHub hosts.</p>
+  <div class="stats">
+    <div class="stat"><div class="k">Contributions, 12 months</div><div class="v">+33%</div><div class="d">6,994 → <b>9,268</b></div></div>
+    <div class="stat"><div class="k">Contributions, last 9 weeks</div><div class="v">2.3×</div><div class="d">1,799 → <b>4,073</b></div></div>
+    <div class="stat"><div class="k">Active days, last 9 weeks</div><div class="v">63/63</div><div class="d">was <b>57</b> of 63</div></div>
+    <div class="stat"><div class="k">Longest streak</div><div class="v">95 d</div><div class="d">was <b>82</b> days</div></div>
+  </div>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/proof-dark.svg" data-dark>
+    <img class="art" src="assets/proof-light.svg" data-light="assets/proof-light.svg" data-darksrc="assets/proof-dark.svg" alt="A contribution graph before and after gbridge sync. Sample data." loading="lazy">
+  </picture>
+  <p class="src">Real commits only. <code>gbridge</code> never fabricates activity or pads streaks, so it stays within GitHub's <a href="https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github">acceptable use policy</a>.</p>
+</div></section>
+
+<section id="privacy"><div class="wrap split">
+  <div>
+    <h2>Two fields leave your machine</h2>
+    <p class="lead">Per commit. Nothing else, ever.</p>
+    <ul class="fields">
+      <li><b>Timestamp</b><span>Exact for a private mirror, date-only for a public one.</span></li>
+      <li><b>Opaque 12-char ID</b><span><code>HMAC(secret, email, author time)</code>. Without your local secret, nobody links a mirror commit back to its source.</span></li>
+    </ul>
+    <div class="never" aria-label="Never leaves your machine"><span>code</span><span>diffs</span><span>messages</span><span>file names</span><span>repo names</span><span>emails</span></div>
+  </div>
+  <div class="frame"><img src="assets/security-sieve-dark.svg" alt="Sieve catching code, diffs, messages, and emails locally while only timestamps and opaque IDs pass to the GitHub mirror" loading="lazy"></div>
+</div></section>
+
+<section id="need"><div class="wrap">
+  <h2>Do you need it?</h2>
+  <p class="lead">Some setups are already counted. Check before you install.</p>
+  <div class="need">
+    <div class="step"><span class="tag">already counted</span><h3>github.com org</h3><p>Turn on <b>Include private contributions on my profile</b> and verify your work email.</p></div>
+    <div class="step"><span class="tag">already counted</span><h3>GitHub Enterprise Server</h3><p>Link accounts with GitHub Connect <a href="https://docs.github.com/en/enterprise-server@latest/account-and-profile/how-tos/contribution-settings/sharing-contributions-from-github-enterprise-server">unified contributions</a>.</p></div>
+    <div class="step yes"><span class="tag">use gbridge</span><h3>Everything else</h3><p>GitLab, Bitbucket, Gitea, Forgejo, Codeberg, Azure DevOps, on-prem servers, air-gapped boxes.</p></div>
+  </div>
+</div></section>
+
+<section id="install"><div class="wrap install">
+  <h2 class="center">Install</h2>
+  <p class="lead center">Needs <code>git</code> and the <a href="https://cli.github.com">GitHub CLI</a> logged in. One binary, no daemon.</p>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div class="term"><button class="copy" id="copy">Copy</button><pre id="cmd"></pre></div>
+  <p class="note">Then: <code>gbridge init --email you@work.com --scan ~/work</code>, <code>gbridge plan</code> to preview, <code>gbridge sync</code> to mirror. Add <code>gbridge hook install</code> to sync on every push. Binaries for every platform on <a href="https://github.com/sorfeb/greenbridge/releases/latest">Releases</a>, with checksums, SBOM, and provenance.</p>
+</div></section>
+
+<section id="faq"><div class="wrap faq">
+  <h2>FAQ</h2>
+  <details><summary>How do I show GitLab contributions on my GitHub profile?</summary><p>Clone your GitLab repos locally, run <code>gbridge init --email you@work.com --scan ~/work</code>, then <code>gbridge sync</code>. Each commit you authored becomes one empty commit in a private GitHub repo you own, on the same date.</p></details>
+  <details><summary>Can Bitbucket or self-hosted commits count on GitHub?</summary><p>Yes. <code>gbridge</code> reads local clones, so the host doesn't matter: Bitbucket Cloud or Server, Gitea, Forgejo, Codeberg, or a bare repo on a box in a closet.</p></details>
+  <details><summary>Will my employer's code end up on GitHub?</summary><p>No. The mirror holds empty commits with a timestamp and an opaque ID. Check your employment contract anyway before mirroring employer work.</p></details>
+  <details><summary>Is this faking activity?</summary><p>No. It mirrors real commits 1:1 on their original author dates. It never invents commits, pads streaks, or edits history.</p></details>
+  <details><summary>Why aren't my squares showing up?</summary><p>Run <code>gbridge doctor</code>. Private mirrors need <b>Include private contributions on my profile</b> enabled, and GitHub can take up to 24 hours to update the graph.</p></details>
+  <details><summary>What about rebases and squash merges?</summary><p>Rebase, cherry-pick, and amend keep the author date, so the commit keeps its ID and counts once. A squash merge creates a new commit, which mirrors alongside the original branch commits while they remain in your clone.</p></details>
+</div></section>
+
+<section class="cta-end"><div class="wrap">
+  <div class="graph" id="graph" aria-hidden="true"></div>
+  <h2>Fill in the gaps.</h2>
+  <p class="lead" style="margin:0 auto 22px">Free, open source, MIT licensed.</p>
+  <div class="ctas"><a class="btn primary" href="#install">Install gbridge</a><a class="btn" href="https://github.com/sorfeb/greenbridge#readme">Read the docs</a></div>
+</div></section>
+
+<footer><div class="wrap">
+  <span>greenbridge · MIT · No trackers on this page.</span>
+  <span><a href="https://github.com/sorfeb/greenbridge">GitHub</a> · <a href="https://github.com/sorfeb/greenbridge/issues">Issues</a> · <a href="https://github.com/sorfeb/greenbridge/blob/main/SECURITY.md">Security</a> · <a href="https://github.com/sorfeb/greenbridge/blob/main/CODE_OF_CONDUCT.md">Code of conduct</a></span>
+</div></footer>
+
+<script>
+// Install tabs
+const I={
+  'Homebrew':['brew install sorfeb/tap/gbridge','macOS or Linux'],
+  'Scoop':['scoop bucket add sorfeb https://github.com/sorfeb/scoop-bucket\nscoop install sorfeb/gbridge','Windows'],
+  'mise':['mise use -g github:sorfeb/greenbridge','any platform'],
+  'Go':['go install github.com/sorfeb/greenbridge/cmd/gbridge@latest','Go 1.27+'],
+};
+const tabs=document.getElementById('tabs'),cmd=document.getElementById('cmd');
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function show(k){
+  [...tabs.children].forEach(b=>b.setAttribute('aria-selected',b.dataset.k===k));
+  const [c,note]=I[k];
+  cmd.innerHTML=`<span class="c"># ${note}</span>\n`+c.split('\n').map(l=>`<span class="p">$ </span>${esc(l)}`).join('\n');
+  cmd.dataset.raw=c;
+}
+Object.keys(I).forEach(k=>{const b=document.createElement('button');b.role='tab';b.dataset.k=k;b.textContent=k;b.onclick=()=>show(k);tabs.append(b)});
+const ua=navigator.userAgent;show(/Windows/.test(ua)?'Scoop':'Homebrew');
+document.getElementById('copy').onclick=async e=>{await navigator.clipboard.writeText(cmd.dataset.raw);e.target.textContent='Copied';setTimeout(()=>e.target.textContent='Copy',1400)};
+
+// Theme: follows the OS, toggle overrides. Swaps light/dark art.
+const mq=matchMedia('(prefers-color-scheme: dark)');
+let dark=localStorage.gbTheme?localStorage.gbTheme==='dark':mq.matches;
+function apply(){
+  document.documentElement.classList.toggle('dark',dark);
+  document.querySelectorAll('source[data-dark]').forEach(s=>s.media=dark?'all':'not all');
+  document.querySelectorAll('img[data-darksrc]').forEach(i=>i.src=dark?i.dataset.darksrc:i.dataset.light);
+}
+apply();
+mq.addEventListener('change',e=>{if(!localStorage.gbTheme){dark=e.matches;apply()}});
+document.getElementById('theme').onclick=()=>{dark=!dark;localStorage.gbTheme=dark?'dark':'light';apply()};
+
+// Closing graph: sparse, then fills in when scrolled into view.
+const g=document.getElementById('graph'),cells=[];
+let s=7;const r=()=>((s=(s*1664525+1013904223)>>>0)/2**32);
+for(let i=0;i<26*7;i++){const b=document.createElement('b');const d=i%7,wk=d>0&&d<6;b.dataset.after=wk?(r()<.88?1+Math.floor(r()*4):0):(r()<.2?1:0);b.dataset.before=r()<.12?1:0;cells.push(b);g.append(b)}
+const paint=k=>cells.forEach(b=>b.style.background=+b.dataset[k]?`var(--g${b.dataset[k]})`:'');
+paint('before');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+new IntersectionObserver(([e],o)=>{if(!e.isIntersecting)return;o.disconnect();
+  if(reduce)return paint('after');
+  cells.forEach((b,i)=>setTimeout(()=>{const v=+b.dataset.after||+b.dataset.before;b.style.background=v?`var(--g${v})`:''},Math.floor(i/7)*45));
+},{threshold:.6}).observe(g);
+</script>
+</body>
+</html>
